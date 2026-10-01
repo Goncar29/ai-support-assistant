@@ -24,4 +24,5 @@ Tests: `cd backend && python -m pytest`
 - [x] Day 7-8: React chat UI (basic)
 - [x] Day 5-6: agent with tool use (search_faq, create_ticket)
 - [x] Day 9: n8n webhook flow (set `N8N_WEBHOOK_URL`; import `n8n/ticket-notification.json`)
-- [ ] Day 10-11: AWS deploy + GitHub Actions
+- [x] GitHub Actions CI (backend tests, frontend build)
+- [ ] Day 10-11: AWS deploy
