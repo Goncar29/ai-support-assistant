@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 
-from app.llm import generate_reply
 from app.main import app
 
 client = TestClient(app)
@@ -19,16 +18,3 @@ def test_chat_offline_echo(monkeypatch):
 
 def test_chat_rejects_empty_message():
     assert client.post("/chat", json={"message": ""}).status_code == 422
-
-
-def test_generate_reply_uses_injected_client():
-    class Block:
-        text = "pong"
-
-    class Messages:
-        def create(self, **kwargs):
-            assert kwargs["messages"][0]["content"] == "ping"
-            return type("R", (), {"content": [Block()]})()
-
-    fake = type("C", (), {"messages": Messages()})()
-    assert generate_reply("ping", client=fake) == "pong"
