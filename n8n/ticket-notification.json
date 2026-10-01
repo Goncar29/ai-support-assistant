@@ -1,0 +1,37 @@
+{
+  "name": "Ticket created notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket",
+        "responseMode": "onReceived"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "msg",
+              "name": "message",
+              "type": "string",
+              "value": "=New ticket {{ $json.body.id }}: {{ $json.body.title }}"
+            }
+          ]
+        }
+      },
+      "name": "Format message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Format message", "type": "main", "index": 0 }]] }
+  }
+}

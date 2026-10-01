@@ -1,5 +1,7 @@
 from typing import Any, Callable, Dict, List
 
+from app.notify import notify_ticket_created
+
 FAQ = {
     "refund": "Refunds are processed within 5 business days after approval.",
     "shipping": "Standard shipping takes 3-7 business days.",
@@ -41,7 +43,9 @@ def search_faq(query: str) -> str:
 
 def create_ticket(title: str, description: str) -> str:
     ticket_id = "T-%04d" % (len(TICKETS) + 1)
-    TICKETS.append({"id": ticket_id, "title": title, "description": description})
+    ticket = {"id": ticket_id, "title": title, "description": description}
+    TICKETS.append(ticket)
+    notify_ticket_created(ticket)
     return "Ticket %s created." % ticket_id
 
 

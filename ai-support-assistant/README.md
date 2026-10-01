@@ -22,6 +22,6 @@ Tests: `cd backend && python -m pytest`
 ## Roadmap
 - [x] Day 1-4: FastAPI + chat endpoint + LLM integration (tests)
 - [x] Day 7-8: React chat UI (basic)
-- [x] Day 5-6: agent with tool use (search_faq, create_ticket)
-- [x] Day 9: n8n webhook flow (set `N8N_WEBHOOK_URL`; import `n8n/ticket-notification.json`)
+- [ ] Day 5-6: agent with tool use
+- [ ] Day 9: n8n webhook flow
 - [ ] Day 10-11: AWS deploy + GitHub Actions
