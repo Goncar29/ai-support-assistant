@@ -46,6 +46,13 @@ def test_translates_request_and_parses_tool_calls():
     assert turn.tool_calls == (ToolCall("1", "search_faq", {"query": "refund"}),)
 
 
+def test_defaults_leave_room_for_thinking_at_low_effort():
+    client = FakeClient([done()])
+    AnthropicProvider(client, model="m").complete("sys", [UserMessage("hi")], [])
+    assert client.calls[0]["max_tokens"] == 16000
+    assert client.calls[0]["output_config"] == {"effort": "low"}
+
+
 def test_ignores_thinking_blocks_in_text_but_replays_them():
     thinking = NS(type="thinking", thinking="", signature="sig")
     client = FakeClient([NS(stop_reason="end_turn", content=[thinking, NS(type="text", text="Answer")])])

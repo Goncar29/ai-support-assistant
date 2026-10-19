@@ -5,6 +5,7 @@ from typing import Mapping, Optional, Tuple
 
 DEFAULT_MODEL = "claude-haiku-5-5"
 DEFAULT_EFFORT = "low"  # chat replies favor latency over deep reasoning
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 
 
@@ -15,6 +16,13 @@ class Settings:
     n8n_webhook_url: Optional[str] = None
     cors_origins: Tuple[str, ...] = DEFAULT_CORS_ORIGINS
     anthropic_effort: str = DEFAULT_EFFORT
+
+    def __post_init__(self) -> None:
+        # Fail at startup, not on the first chat request.
+        if self.anthropic_effort not in EFFORT_LEVELS:
+            raise ValueError(
+                "ANTHROPIC_EFFORT must be one of %s, got %r" % (", ".join(EFFORT_LEVELS), self.anthropic_effort)
+            )
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":

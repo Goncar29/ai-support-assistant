@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -47,6 +48,11 @@ def test_settings_from_env_parses_values():
     assert defaults.cors_origins == ("http://localhost:5173",)
     assert defaults.anthropic_model == "claude-haiku-5-5"
     assert defaults.anthropic_effort == "low"
+
+
+def test_settings_reject_unknown_effort():
+    with pytest.raises(ValueError, match="ANTHROPIC_EFFORT"):
+        Settings.from_env({"ANTHROPIC_EFFORT": "lowww"})
 
 
 def test_notifier_is_n8n_only_when_url_is_configured():
