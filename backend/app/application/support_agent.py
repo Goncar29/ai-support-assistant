@@ -79,6 +79,7 @@ class SupportAgent:
 
 
 def _final_text(turn: AssistantMessage) -> str:
-    if turn.stop_reason == STOP_REFUSAL and not turn.text:
-        return REFUSAL_REPLY
-    return turn.text
+    if turn.text:
+        return turn.text
+    # Never finish with an empty answer the user would not see.
+    return REFUSAL_REPLY if turn.stop_reason == STOP_REFUSAL else GIVE_UP_REPLY

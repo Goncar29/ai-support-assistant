@@ -69,6 +69,29 @@ describe("useChat", () => {
     expect(result.current.error).toBe("Request failed (500)");
   });
 
+  it("reports a stream that ends without a final event", async () => {
+    replyWith({ type: "delta", text: "partial" });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("hi"));
+
+    expect(texts(result.current.messages)).toEqual([
+      ["user", "hi"],
+      ["assistant", "partial"],
+    ]);
+    expect(result.current.error).toBe("The connection closed before the reply finished.");
+  });
+
+  it("ignores unknown event types", async () => {
+    replyWith({ type: "heartbeat" } as unknown as ChatStreamEvent, { type: "done", reply: "ok" });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("hi"));
+
+    expect(result.current.error).toBeNull();
+    expect(texts(result.current.messages).at(-1)).toEqual(["assistant", "ok"]);
+  });
+
   it("keeps partial text when the server reports an error mid-stream", async () => {
     replyWith({ type: "delta", text: "partial" }, { type: "error", message: "Something went wrong. Please try again." });
     const { result } = renderHook(() => useChat());

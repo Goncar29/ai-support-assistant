@@ -8,7 +8,7 @@ from app.application.conversation import (
     ToolResultsMessage,
     UserMessage,
 )
-from app.application.support_agent import REFUSAL_REPLY, ReplyFinished, SupportAgent, ToolStarted
+from app.application.support_agent import GIVE_UP_REPLY, REFUSAL_REPLY, ReplyFinished, SupportAgent, ToolStarted
 from app.application.support_tools import SupportTools
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
 from app.infrastructure.notifications import NullNotifier
@@ -77,6 +77,15 @@ def test_truncated_turn_never_runs_its_tools():
     assert agent.reply("help") == "Creating"
     assert tickets.list() == []
     assert len(llm.calls) == 1
+
+
+def test_truncated_turn_without_text_gets_a_fallback_reply():
+    truncated = AssistantMessage(
+        text="", tool_calls=(ToolCall("1", "create_ticket", {"title": "t"}),), stop_reason=STOP_MAX_TOKENS
+    )
+    agent, _, tickets = make_agent([truncated])
+    assert agent.reply("help") == GIVE_UP_REPLY
+    assert tickets.list() == []
 
 
 def test_refusal_without_text_gets_a_polite_reply():
