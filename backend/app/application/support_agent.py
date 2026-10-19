@@ -1,6 +1,16 @@
-from typing import List
+from dataclasses import dataclass
+from typing import Iterator, List, Optional, Union
 
-from app.application.conversation import Message, ToolResultsMessage, UserMessage
+from app.application.conversation import (
+    STOP_REFUSAL,
+    STOP_TOOL_USE,
+    AssistantMessage,
+    Message,
+    TextDelta,
+    ToolResultsMessage,
+    TurnComplete,
+    UserMessage,
+)
 from app.application.ports import LLMProvider
 from app.application.support_tools import SupportTools
 
@@ -10,6 +20,22 @@ SYSTEM_PROMPT = (
 )
 MAX_STEPS = 5
 GIVE_UP_REPLY = "Sorry, I could not complete that request."
+REFUSAL_REPLY = "Sorry, I can't help with that request."
+
+
+@dataclass(frozen=True)
+class ToolStarted:
+    name: str
+
+
+@dataclass(frozen=True)
+class ReplyFinished:
+    """Last event of a run. `text` is the authoritative final answer."""
+
+    text: str
+
+
+AgentEvent = Union[TextDelta, ToolStarted, ReplyFinished]
 
 
 class SupportAgent:
@@ -20,13 +46,39 @@ class SupportAgent:
         self._tools = tools
         self._max_steps = max_steps
 
-    def reply(self, message: str) -> str:
+    def run(self, message: str) -> Iterator[AgentEvent]:
         messages: List[Message] = [UserMessage(message)]
         for _ in range(self._max_steps):
-            turn = self._llm.complete(SYSTEM_PROMPT, messages, self._tools.specs)
-            if not turn.tool_calls:
-                return turn.text
+            turn: Optional[AssistantMessage] = None
+            for event in self._llm.stream(SYSTEM_PROMPT, messages, self._tools.specs):
+                if isinstance(event, TurnComplete):
+                    turn = event.message
+                else:
+                    yield event
+            if turn is None:
+                raise RuntimeError("LLMProvider.stream must end with TurnComplete")
+
+            # Only a turn that ended to use tools has complete tool calls to run.
+            if turn.stop_reason != STOP_TOOL_USE or not turn.tool_calls:
+                yield ReplyFinished(_final_text(turn))
+                return
             messages.append(turn)
-            results = tuple(self._tools.execute(call) for call in turn.tool_calls)
-            messages.append(ToolResultsMessage(results))
-        return GIVE_UP_REPLY
+            results = []
+            for call in turn.tool_calls:
+                yield ToolStarted(call.name)
+                results.append(self._tools.execute(call))
+            messages.append(ToolResultsMessage(tuple(results)))
+        yield ReplyFinished(GIVE_UP_REPLY)
+
+    def reply(self, message: str) -> str:
+        final = GIVE_UP_REPLY
+        for event in self.run(message):
+            if isinstance(event, ReplyFinished):
+                final = event.text
+        return final
+
+
+def _final_text(turn: AssistantMessage) -> str:
+    if turn.stop_reason == STOP_REFUSAL and not turn.text:
+        return REFUSAL_REPLY
+    return turn.text
