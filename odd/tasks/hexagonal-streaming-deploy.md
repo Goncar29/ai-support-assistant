@@ -18,7 +18,7 @@ Branch: `feat/hexagonal-architecture` · Delivery strategy: ask-on-risk · Test 
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
 | T1 | S1, S2 | inline | done | `a4606d6`; RED (5 import errors) → GREEN 18 passed |
-| T2 | S3 | inline | blocked: needs Python 3.12 locally | — |
+| T2 | S3 | inline | done | `87afebb`, `8db2a69`; RED → GREEN 21 passed; verifier PASS; native review approved |
 | T3 | S4 | inline | pending | — |
 | T4 | S5 | inline | pending: needs Neon `DATABASE_URL` | — |
 | T5 | S6 | inline | pending: needs Vercel account | — |
@@ -34,3 +34,5 @@ Route evidence: no Writer trigger (tasks depend on each other in sequence, not p
 - L4 (2026-10-19): "bien vamos por como lo recomiendas" → second provider deferred until after deploy.
 - L5: local Python is 3.9.13; pip only offers anthropic <= 0.125.0 there. T2 waits for Python 3.12 (CI already uses 3.12). T1 code stays 3.9-compatible.
 - L6 (2026-10-19): T1 done in `a4606d6`. Checks: pytest 18 passed; the grep found no FastAPI/Anthropic/os/infrastructure imports in domain/application; a differential probe against `2c5fb53` (/health, /chat echo, 422 empty, 422 missing, CORS preflight) was identical. RDD assess: medium, review_due=false (under_budget), untracked .atl/ excluded. Risk: none. Next: T2 needs Python 3.12 installed locally.
+- L7 (2026-10-19): Python 3.15.0 was released on 2026-10-09 (the user flagged it), but Vercel documents only 3.12/3.13/3.14 and winget lacks 3.15, so the user installed 3.14.7. T2 committed in `87afebb`: claude-haiku-5-5, effort low (ANTHROPIC_EFFORT), max_tokens 16000, anthropic 1.15.0, `.python-version` 3.14 read by CI. Real API smoke test pending: no ANTHROPIC_API_KEY in this environment. Risk: item 5 (dependencies + CI). The escalated RDD assess returned high and review_due. An independent verifier was launched before the native review.
+- L8 (2026-10-19): Independent verifier gave S3 PASS. Clean 3.14 install: 19 passed. The differential matched bodies and status codes; the CORS headers differ only through the Starlette upgrade (vary, QUERY), judged an advisory, not a blocker. The SDK accepts output_config, and setup-python resolves python-version-file from the repo root. Follow-ups in `8db2a69`: ANTHROPIC_EFFORT is validated at startup, and a test pins the max_tokens=16000 default. `e78f23d` ignores .atl/ and *.stackdump. Native review lineage review-582f6e8c9ee1ca53 (lenses risk + reliability, base 1114817..e78f23d): user granted consent, approved, acknowledged (authority burned). Reviewed boundary is now e78f23d. The slice 2c5fb53..1114817 (T1) is still under_budget. Pending: live API smoke test needs ANTHROPIC_API_KEY.
