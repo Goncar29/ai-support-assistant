@@ -50,7 +50,7 @@ Frontend:
     npm install
     npm run dev
 
-Tests: `cd backend && python -m pytest`
+Tests: `cd backend && python -m pytest` (backend) and `cd frontend && npm test` (frontend, Vitest + Testing Library)
 
 ## Roadmap
 - [x] Day 1-4: FastAPI + chat endpoint + LLM integration (tests)
