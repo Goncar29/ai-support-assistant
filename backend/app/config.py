@@ -3,7 +3,8 @@ import os
 from dataclasses import dataclass
 from typing import Mapping, Optional, Tuple
 
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-haiku-5-5"
+DEFAULT_EFFORT = "low"  # chat replies favor latency over deep reasoning
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 
 
@@ -13,6 +14,7 @@ class Settings:
     anthropic_model: str = DEFAULT_MODEL
     n8n_webhook_url: Optional[str] = None
     cors_origins: Tuple[str, ...] = DEFAULT_CORS_ORIGINS
+    anthropic_effort: str = DEFAULT_EFFORT
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -22,4 +24,5 @@ class Settings:
             anthropic_model=env.get("ANTHROPIC_MODEL") or DEFAULT_MODEL,
             n8n_webhook_url=env.get("N8N_WEBHOOK_URL") or None,
             cors_origins=origins or DEFAULT_CORS_ORIGINS,
+            anthropic_effort=env.get("ANTHROPIC_EFFORT") or DEFAULT_EFFORT,
         )

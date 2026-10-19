@@ -20,7 +20,7 @@ def build_llm(settings: Settings) -> LLMProvider:
     from app.infrastructure.llm.anthropic_provider import AnthropicProvider
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicProvider(client, model=settings.anthropic_model)
+    return AnthropicProvider(client, model=settings.anthropic_model, effort=settings.anthropic_effort)
 
 
 def build_notifier(settings: Settings) -> TicketNotifier:

@@ -38,9 +38,15 @@ def test_settings_from_env_parses_values():
         "ANTHROPIC_MODEL": "some-model",
         "N8N_WEBHOOK_URL": "http://n8n.test/hook",
         "CORS_ORIGINS": "https://a.com, https://b.com",
+        "ANTHROPIC_EFFORT": "medium",
     })
-    assert settings == Settings("key", "some-model", "http://n8n.test/hook", ("https://a.com", "https://b.com"))
-    assert Settings.from_env({}).cors_origins == ("http://localhost:5173",)
+    assert settings == Settings(
+        "key", "some-model", "http://n8n.test/hook", ("https://a.com", "https://b.com"), "medium"
+    )
+    defaults = Settings.from_env({})
+    assert defaults.cors_origins == ("http://localhost:5173",)
+    assert defaults.anthropic_model == "claude-haiku-5-5"
+    assert defaults.anthropic_effort == "low"
 
 
 def test_notifier_is_n8n_only_when_url_is_configured():
