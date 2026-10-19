@@ -17,7 +17,7 @@ Branch: `feat/hexagonal-architecture` · Delivery strategy: ask-on-risk · Test 
 
 | ID | Specs | Route | Status | Evidence |
 |----|-------|-------|--------|----------|
-| T1 | S1, S2 | inline | in progress | — |
+| T1 | S1, S2 | inline | done | `a4606d6`; RED (5 import errors) → GREEN 18 passed |
 | T2 | S3 | inline | blocked: needs Python 3.12 locally | — |
 | T3 | S4 | inline | pending | — |
 | T4 | S5 | inline | pending: needs Neon `DATABASE_URL` | — |
@@ -33,3 +33,4 @@ Route evidence: no Writer trigger (tasks depend on each other in sequence, not p
 - L3 (2026-10-19): "perfecto, otra cosa, aqui hablamos solo de claude, pero podriamos hacer que esto sirba para integrar otras IA, si ya usamos una arquitectura limpia podemos hacer algo para varias IA" → Decision: neutral LLM port; Anthropic adapter first.
 - L4 (2026-10-19): "bien vamos por como lo recomiendas" → second provider deferred until after deploy.
 - L5: local Python is 3.9.13; pip only offers anthropic <= 0.125.0 there. T2 waits for Python 3.12 (CI already uses 3.12). T1 code stays 3.9-compatible.
+- L6 (2026-10-19): T1 done in `a4606d6`. Checks: pytest 18 passed; the grep found no FastAPI/Anthropic/os/infrastructure imports in domain/application; a differential probe against `2c5fb53` (/health, /chat echo, 422 empty, 422 missing, CORS preflight) was identical. RDD assess: medium, review_due=false (under_budget), untracked .atl/ excluded. Risk: none. Next: T2 needs Python 3.12 installed locally.
