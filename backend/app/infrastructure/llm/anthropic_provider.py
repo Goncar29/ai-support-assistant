@@ -13,15 +13,18 @@ from app.application.conversation import (
 class AnthropicProvider:
     """LLMProvider adapter for the Anthropic Messages API."""
 
-    def __init__(self, client: Any, model: str, max_tokens: int = 1024):
+    # Thinking counts toward max_tokens, so leave room beyond the visible answer.
+    def __init__(self, client: Any, model: str, effort: str = "low", max_tokens: int = 16000):
         self._client = client
         self._model = model
+        self._effort = effort
         self._max_tokens = max_tokens
 
     def complete(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> AssistantMessage:
         request: Dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
+            "output_config": {"effort": self._effort},
             "system": system,
             "messages": [_to_wire(m) for m in messages],
         }

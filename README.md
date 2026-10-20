@@ -4,9 +4,10 @@ React + TypeScript frontend, FastAPI backend, LLM integration (Claude).
 
 ## Run
 
-Backend (works offline without an API key, echoing the message):
+Backend (Python 3.14, pinned in `.python-version`; works offline without an API key, echoing the message):
 
     cd backend
+    py -3.14 -m venv .venv && .venv\Scripts\activate
     pip install -r requirements.txt
     set ANTHROPIC_API_KEY=...        # optional
     python -m uvicorn app.main:app --reload
@@ -16,7 +17,8 @@ Backend environment variables (all optional):
 | Variable | Purpose | Default |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Enables the Claude agent; without it the API echoes messages | unset (offline mode) |
-| `ANTHROPIC_MODEL` | Claude model id | `claude-haiku-4-5-20251001` |
+| `ANTHROPIC_MODEL` | Claude model id | `claude-haiku-5-5` |
+| `ANTHROPIC_EFFORT` | Reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`); lower is faster | `low` |
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
 
@@ -47,7 +49,7 @@ Tests: `cd backend && python -m pytest`
 - [x] Day 9: n8n webhook flow (set `N8N_WEBHOOK_URL`; import `n8n/ticket-notification.json`)
 - [x] GitHub Actions CI (backend tests, frontend build)
 - [x] Hexagonal architecture with a provider-neutral LLM port
-- [ ] Claude Haiku 5.5 + SDK upgrade
+- [x] Claude Haiku 5.5 + SDK upgrade
 - [ ] Streaming replies (SSE)
 - [ ] Postgres persistence (Neon)
 - [ ] Free deploy on Vercel
