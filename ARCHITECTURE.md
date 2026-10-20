@@ -28,7 +28,7 @@ flowchart LR
 
 ## The layers
 
-Dependencies point **inward only**. Outer layers know inner ones; inner layers never import outer ones. A grep for `fastapi`, `anthropic`, `psycopg` or `os` in `domain/` and `application/` must come back empty.
+Dependencies point **inward only**. Outer layers know inner ones; inner layers never import outer ones. `backend/tests/test_architecture.py` enforces this on every test run: `domain/` and `application/` may not import `fastapi`, `anthropic`, `psycopg`, `os` or any adapter, and `api/` may reach the core only through its ports.
 
 ```mermaid
 flowchart TB
@@ -51,24 +51,52 @@ flowchart TB
 | Layer | Responsibility | Key files |
 |---|---|---|
 | `domain/` | Business entities. Today: `Ticket(id, title, description)`. | `domain/ticket.py` |
-| `application/` | Use cases: the agent loop, the tools, and the **ports** (interfaces) it needs. | `support_agent.py`, `support_tools.py`, `ports.py`, `conversation.py` |
+| `application/` | Use cases: the agent loop, the tools, and the **ports** on both sides of the hexagon. | `support_agent.py`, `support_tools.py`, `ports.py`, `conversation.py` |
 | `infrastructure/` | **Adapters**: concrete implementations of the ports. | `llm/anthropic_provider.py`, `llm/echo_provider.py`, `postgres.py`, `in_memory.py`, `notifications.py` |
-| `api/` | Translates HTTP into calls to the agent and agent events into HTTP. | `api/routes.py` |
+| `api/` | Driving adapter: translates HTTP into calls to the `ChatUseCase` port and its events into HTTP. It never sees `SupportAgent`. | `api/routes.py` |
 | `main.py` | **Composition root**: the only place that decides which adapter plugs into which port. | `main.py` |
 | `config.py` | Reads every environment variable in one place and validates it at startup. | `config.py` |
 
 ### Ports and adapters
 
-A **port** is an interface the application declares ("I need something that can create tickets"). An **adapter** is a concrete implementation ("tickets stored in Postgres"). `main.py` picks the adapter from configuration:
+A **port** is an interface on the edge of the application; an **adapter** is the concrete thing plugged into it. Ports come in two kinds:
 
-| Port (`application/ports.py`) | Adapter used when... | Otherwise |
+- **Driving port**: how the outside *calls* the application. `ChatUseCase` (`run(message)` streams events, `reply(message)` returns the final text) is the only one. FastAPI and the tests call it; `SupportAgent` implements it, and only `main.py` knows that.
+- **Driven ports**: what the application *needs* from the outside. `main.py` picks each adapter from configuration:
+
+| Driven port (`application/ports.py`) | Adapter used when... | Otherwise |
 |---|---|---|
 | `LLMProvider` | `ANTHROPIC_API_KEY` is set → `AnthropicProvider` | `EchoProvider` (offline mode, echoes the message) |
 | `TicketRepository` | `DATABASE_URL` is set → `PostgresTicketRepository` | `InMemoryTicketRepository` (lost on restart) |
 | `TicketNotifier` | `N8N_WEBHOOK_URL` is set → `N8nNotifier` | `NullNotifier` |
 | `FaqRepository` | always `InMemoryFaqRepository` with the built-in FAQ | — |
 
-Why it matters: tests run the real agent loop against fake adapters (`backend/tests/fakes.py`), the app works offline with no keys at all, and adding another LLM provider means writing one adapter, not rewriting the agent.
+```mermaid
+flowchart LR
+    subgraph Driving["Driving side"]
+        HTTP[FastAPI routes]
+        T[pytest]
+    end
+    subgraph Core["Hexagon: application + domain"]
+        UC{{ChatUseCase}}
+        AG[SupportAgent]
+        UC -.implemented by.-> AG
+    end
+    subgraph Driven["Driven side"]
+        L[AnthropicProvider / EchoProvider]
+        R[Postgres / InMemory tickets]
+        N[N8nNotifier / NullNotifier]
+        F[InMemoryFaqRepository]
+    end
+    HTTP --> UC
+    T --> UC
+    AG -- LLMProvider --> L
+    AG -- TicketRepository --> R
+    AG -- TicketNotifier --> N
+    AG -- FaqRepository --> F
+```
+
+Why it matters: tests run the real agent loop against fake adapters (`backend/tests/fakes.py`), the API can be driven by any `ChatUseCase` (a test does exactly that with a canned implementation), the app works offline with no keys at all, and adding another LLM provider means writing one adapter, not rewriting the agent.
 
 ### The provider-neutral conversation
 
@@ -91,14 +119,14 @@ What happens when a user sends "I can't log in, my password reset email never ar
 sequenceDiagram
     participant B as Browser (useChat)
     participant R as api/routes.py
-    participant A as SupportAgent
+    participant A as SupportAgent (via ChatUseCase)
     participant L as LLMProvider (Claude)
     participant T as SupportTools
     participant D as TicketRepository (Postgres)
     participant N as TicketNotifier (n8n)
 
     B->>R: POST /chat/stream {"message": "..."}
-    R->>A: agent.run(message)
+    R->>A: chat.run(message)
     A->>L: stream(system prompt, history, tool specs)
     L-->>A: TurnComplete(stop_reason=tool_use, search_faq)
     A-->>R: ToolStarted("search_faq")
@@ -211,7 +239,7 @@ Frontend: `VITE_API_URL` points to the backend (default `http://localhost:8000`)
 # Backend
 cd backend
 py -3.14 -m venv .venv && .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python -m app.migrate                                   # only with DATABASE_URL
 python -m uvicorn app.main:app --reload --env-file .env
 
@@ -225,23 +253,23 @@ npm run dev
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Backend unit + API | `cd backend && python -m pytest` | Agent loop with fake LLMs, tools, SSE framing, settings, adapter selection, Anthropic adapter translation |
+| Backend unit + API | `cd backend && python -m pytest` | Agent loop with fake LLMs, tools, SSE framing, settings, adapter selection, Anthropic adapter translation, and the layer dependency rules (`test_architecture.py`) |
 | Postgres integration | same, with `TEST_DATABASE_URL` set | Real database, each run in a throwaway schema that is dropped afterwards |
 | Frontend | `cd frontend && npm test` | SSE parser (split frames, errors) and the `useChat` hook |
 
 Ports make most tests fast and offline: the agent runs against scripted fake models, so no test needs an API key.
 
-## Deployment (planned)
+## Deployment
 
-The target is a free, portfolio-grade setup:
+A free, portfolio-grade setup on two Vercel projects (Hobby plan) linked to the same GitHub repository:
 
 | Component | Platform | Status |
 |---|---|---|
 | Database | Neon Postgres, AWS us-east-1, free plan | Done |
-| Frontend | Vercel (static Vite build) | Pending |
-| Backend | Vercel (FastAPI as a Python function, same region as the database) | Pending |
+| Frontend | Vercel project `ai-support-assistant`, root `frontend/`, static Vite build | Live: https://ai-support-assistant-sigma.vercel.app |
+| Backend | Vercel project `ai-support-assistant-api`, root `backend/`, FastAPI as a Python function in `iad1` | Live: https://ai-support-assistant-api.vercel.app |
 
-Keeping the function and the database in the same region keeps every query a short round trip.
+Keeping the function and the database in the same region keeps every query a short round trip. `VITE_API_URL` (frontend) and `CORS_ORIGINS` (backend) point each project at the other; secrets (`DATABASE_URL`, `ANTHROPIC_API_KEY`) are set as sensitive variables in the Vercel dashboard. Vercel reads the Python version from `backend/.python-version` and installs only `backend/requirements.txt`; test tools live in `requirements-dev.txt`.
 
 ## Where to go next
 

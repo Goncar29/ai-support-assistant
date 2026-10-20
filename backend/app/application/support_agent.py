@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import Iterator, List, Optional, Union
+from typing import Iterator, List, Optional
 
 from app.application.conversation import (
     STOP_REFUSAL,
@@ -11,7 +10,7 @@ from app.application.conversation import (
     TurnComplete,
     UserMessage,
 )
-from app.application.ports import LLMProvider
+from app.application.ports import AgentEvent, LLMProvider, ReplyFinished, ToolStarted
 from app.application.support_tools import SupportTools
 
 SYSTEM_PROMPT = (
@@ -23,23 +22,9 @@ GIVE_UP_REPLY = "Sorry, I could not complete that request."
 REFUSAL_REPLY = "Sorry, I can't help with that request."
 
 
-@dataclass(frozen=True)
-class ToolStarted:
-    name: str
-
-
-@dataclass(frozen=True)
-class ReplyFinished:
-    """Last event of a run. `text` is the authoritative final answer."""
-
-    text: str
-
-
-AgentEvent = Union[TextDelta, ToolStarted, ReplyFinished]
-
-
 class SupportAgent:
-    """Tool-use loop: ask the model, run the tools it requests, repeat until it answers."""
+    """Implements the ChatUseCase driving port with a tool-use loop:
+    ask the model, run the tools it requests, repeat until it answers."""
 
     def __init__(self, llm: LLMProvider, tools: SupportTools, max_steps: int = MAX_STEPS):
         self._llm = llm

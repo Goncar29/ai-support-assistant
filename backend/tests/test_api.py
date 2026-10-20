@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.application.conversation import TextDelta
-from app.application.support_agent import ReplyFinished, ToolStarted
+from app.application.ports import ReplyFinished, ToolStarted
 from app.config import Settings
 from app.main import build_notifier, build_ticket_repository, create_app
 from app.infrastructure.in_memory import InMemoryTicketRepository
@@ -51,7 +51,7 @@ def test_chat_stream_sends_deltas_then_done():
 
 def test_chat_stream_reports_tool_activity():
     app = create_app(Settings())
-    app.state.agent = SimpleNamespace(run=lambda message: iter([ToolStarted("search_faq"), ReplyFinished("ok")]))
+    app.state.chat = SimpleNamespace(run=lambda message: iter([ToolStarted("search_faq"), ReplyFinished("ok")]))
 
     events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
 
@@ -64,7 +64,7 @@ def test_chat_stream_turns_failures_into_an_error_event():
         raise RuntimeError("secret upstream detail")
 
     app = create_app(Settings())
-    app.state.agent = SimpleNamespace(run=failing_run)
+    app.state.chat = SimpleNamespace(run=failing_run)
 
     events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
 
@@ -121,3 +121,24 @@ def test_tickets_use_postgres_only_when_database_url_is_configured():
     # Building the adapter must not open a connection: cold starts stay fast and the app boots without the DB.
     repo = build_ticket_repository(Settings(database_url="postgresql://u:p@unreachable.invalid/app"))
     assert isinstance(repo, PostgresTicketRepository)
+
+
+class CannedChat:
+    """Any ChatUseCase implementation can drive the API, not only SupportAgent."""
+
+    def run(self, message):
+        yield TextDelta("canned ")
+        yield ReplyFinished("canned reply to " + message)
+
+    def reply(self, message):
+        return "canned reply to " + message
+
+
+def test_api_is_driven_through_the_chat_port():
+    app = create_app(Settings())
+    app.state.chat = CannedChat()
+    client = TestClient(app)
+
+    assert client.post("/chat", json={"message": "hi"}).json() == {"reply": "canned reply to hi"}
+    events = parse_sse(client.post("/chat/stream", json={"message": "hi"}).text)
+    assert events == [("delta", {"text": "canned "}), ("done", {"reply": "canned reply to hi"})]

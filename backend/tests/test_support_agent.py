@@ -8,7 +8,8 @@ from app.application.conversation import (
     ToolResultsMessage,
     UserMessage,
 )
-from app.application.support_agent import GIVE_UP_REPLY, REFUSAL_REPLY, ReplyFinished, SupportAgent, ToolStarted
+from app.application.ports import ChatUseCase, ReplyFinished, ToolStarted
+from app.application.support_agent import GIVE_UP_REPLY, REFUSAL_REPLY, SupportAgent
 from app.application.support_tools import SupportTools
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
 from app.infrastructure.notifications import NullNotifier
@@ -91,3 +92,8 @@ def test_truncated_turn_without_text_gets_a_fallback_reply():
 def test_refusal_without_text_gets_a_polite_reply():
     agent, _, _ = make_agent([AssistantMessage(text="", stop_reason=STOP_REFUSAL)])
     assert agent.reply("something unsafe") == REFUSAL_REPLY
+
+
+def test_support_agent_implements_the_chat_port():
+    agent, _, _ = make_agent([AssistantMessage("hi")])
+    assert isinstance(agent, ChatUseCase)
