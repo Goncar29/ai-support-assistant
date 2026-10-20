@@ -7,3 +7,7 @@ dist/
 cv-marvik-borrador.md
 .atl/
 *.stackdump
+# Locally installed agent skills (ego-browser)
+.agents/
+.claude/skills/
+skills-lock.json
