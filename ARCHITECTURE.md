@@ -211,7 +211,7 @@ Frontend: `VITE_API_URL` points to the backend (default `http://localhost:8000`)
 # Backend
 cd backend
 py -3.14 -m venv .venv && .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python -m app.migrate                                   # only with DATABASE_URL
 python -m uvicorn app.main:app --reload --env-file .env
 

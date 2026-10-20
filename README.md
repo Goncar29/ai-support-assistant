@@ -6,11 +6,11 @@ How it works (hexagonal layers, request flow, streaming, persistence): see [ARCH
 
 ## Run
 
-Backend (Python 3.14, pinned in `.python-version`; works offline without an API key, echoing the message):
+Backend (Python 3.14, pinned in `backend/.python-version`; works offline without an API key, echoing the message):
 
     cd backend
     py -3.14 -m venv .venv && .venv\Scripts\activate
-    pip install -r requirements.txt
+    pip install -r requirements-dev.txt   # runtime deps + pytest; Vercel installs only requirements.txt
     python -m app.migrate            # once, only when DATABASE_URL is set: creates the tickets table
     python -m uvicorn app.main:app --reload --env-file .env
 
