@@ -2,6 +2,8 @@
 
 React + TypeScript frontend, FastAPI backend, LLM integration (Claude).
 
+How it works (hexagonal layers, request flow, streaming, persistence): see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Run
 
 Backend (Python 3.14, pinned in `.python-version`; works offline without an API key, echoing the message):
@@ -25,6 +27,12 @@ Backend environment variables (all optional):
 | `DATABASE_URL` | Postgres connection string (use Neon's pooled `-pooler` host); without it tickets live in memory and are lost on restart | unset (in-memory) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
 
+Frontend:
+
+    cd frontend
+    npm install
+    npm run dev
+
 ## API
 
 | Endpoint | Description |
@@ -34,25 +42,6 @@ Backend environment variables (all optional):
 | `POST /chat/stream` | Same input, answered as Server-Sent Events: `delta` (`{"text"}` chunks as they are generated), `tool` (`{"name"}` when the agent runs a tool), then `done` (`{"reply"}`, the authoritative final answer) or `error` (`{"message"}`) |
 
 The frontend uses `/chat/stream`, so text appears while the model is still writing.
-
-## Architecture
-
-The backend follows a hexagonal (ports and adapters) layout. Dependencies point inward: `domain` and `application` never import FastAPI, the Anthropic SDK or environment variables.
-
-    backend/app/
-    ├── domain/          Ticket entity
-    ├── application/     support agent loop, tools, ports, provider-neutral conversation types
-    ├── infrastructure/  adapters: Anthropic + offline echo LLMs, Postgres + in-memory repositories, n8n notifier
-    ├── api/             FastAPI routes and request/response schemas
-    ├── config.py        settings read from the environment
-    ├── migrate.py       creates the database schema (`python -m app.migrate`)
-    └── main.py          composition root: wires adapters into ports
-
-Frontend:
-
-    cd frontend
-    npm install
-    npm run dev
 
 Tests: `cd backend && python -m pytest` (backend; Postgres integration tests run only when `TEST_DATABASE_URL` is set, each in a throwaway schema) and `cd frontend && npm test` (frontend, Vitest + Testing Library)
 
