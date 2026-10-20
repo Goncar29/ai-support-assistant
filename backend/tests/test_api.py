@@ -1,6 +1,11 @@
+import json
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app.application.conversation import TextDelta
+from app.application.support_agent import ReplyFinished, ToolStarted
 from app.config import Settings
 from app.main import build_notifier, create_app
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
@@ -22,6 +27,50 @@ def test_chat_offline_echo_without_api_key():
 
 def test_chat_rejects_empty_message():
     assert make_client().post("/chat", json={"message": ""}).status_code == 422
+
+
+def parse_sse(body):
+    events = []
+    for frame in body.strip().split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in frame.splitlines())
+        events.append((fields["event"], json.loads(fields["data"])))
+    return events
+
+
+def test_chat_stream_sends_deltas_then_done():
+    res = make_client(anthropic_api_key=None).post("/chat/stream", json={"message": "hola"})
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/event-stream")
+    events = parse_sse(res.text)
+    assert events[0] == ("delta", {"text": "[offline mode] You said: hola"})
+    assert events[-1] == ("done", {"reply": "[offline mode] You said: hola"})
+
+
+def test_chat_stream_reports_tool_activity():
+    app = create_app(Settings())
+    app.state.agent = SimpleNamespace(run=lambda message: iter([ToolStarted("search_faq"), ReplyFinished("ok")]))
+
+    events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
+
+    assert events == [("tool", {"name": "search_faq"}), ("done", {"reply": "ok"})]
+
+
+def test_chat_stream_turns_failures_into_an_error_event():
+    def failing_run(message):
+        yield TextDelta("partial")
+        raise RuntimeError("secret upstream detail")
+
+    app = create_app(Settings())
+    app.state.agent = SimpleNamespace(run=failing_run)
+
+    events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
+
+    assert events == [("delta", {"text": "partial"}), ("error", {"message": "Something went wrong. Please try again."})]
+
+
+def test_chat_stream_rejects_empty_message():
+    assert make_client().post("/chat/stream", json={"message": ""}).status_code == 422
 
 
 def test_cors_allows_only_configured_origins():

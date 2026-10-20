@@ -5,3 +5,5 @@
 .messages .assistant { background: #f1f5f9; align-self: flex-start; }
 form { display: flex; gap: .5rem; }
 form input { flex: 1; padding: .5rem; }
+.messages li { white-space: pre-wrap; }
+.messages .status { color: #64748b; font-style: italic; }

@@ -3,15 +3,15 @@
 Adapters in `app.infrastructure` implement these protocols; the application
 never imports an adapter directly.
 """
-from typing import List, Protocol, Sequence
+from typing import Iterator, List, Protocol, Sequence
 
-from app.application.conversation import AssistantMessage, Message, ToolSpec
+from app.application.conversation import LLMEvent, Message, ToolSpec
 from app.domain.ticket import Ticket
 
 
 class LLMProvider(Protocol):
-    def complete(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> AssistantMessage:
-        """Run one model turn and return the assistant's reply (text and/or tool calls)."""
+    def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
+        """Run one model turn: yield TextDelta chunks as they arrive, then exactly one TurnComplete."""
 
 
 class TicketRepository(Protocol):

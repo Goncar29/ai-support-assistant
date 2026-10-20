@@ -1,22 +1,25 @@
 """Test doubles that implement the application ports."""
-from typing import List, Sequence
+from typing import Iterator, List, Sequence
 
-from app.application.conversation import AssistantMessage, Message, ToolSpec
+from app.application.conversation import AssistantMessage, LLMEvent, Message, TextDelta, ToolSpec, TurnComplete
 from app.domain.ticket import Ticket
 
 
 class ScriptedLLM:
-    """LLMProvider that returns pre-scripted turns and records what it was sent."""
+    """LLMProvider that streams pre-scripted turns and records what it was sent."""
 
     def __init__(self, turns: Sequence[AssistantMessage]):
         self.turns = list(turns)
         self.calls: List[List[Message]] = []
         self.tools: List[Sequence[ToolSpec]] = []
 
-    def complete(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> AssistantMessage:
+    def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         self.calls.append(list(messages))
         self.tools.append(tools)
-        return self.turns.pop(0)
+        turn = self.turns.pop(0)
+        if turn.text:
+            yield TextDelta(turn.text)
+        yield TurnComplete(turn)
 
 
 class RecordingNotifier:

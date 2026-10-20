@@ -22,6 +22,16 @@ Backend environment variables (all optional):
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
 
+## API
+
+| Endpoint | Description |
+|---|---|
+| `GET /health` | Liveness check: `{"status": "ok"}` |
+| `POST /chat` | `{"message": "..."}` → `{"reply": "..."}` once the agent finishes |
+| `POST /chat/stream` | Same input, answered as Server-Sent Events: `delta` (`{"text"}` chunks as they are generated), `tool` (`{"name"}` when the agent runs a tool), then `done` (`{"reply"}`, the authoritative final answer) or `error` (`{"message"}`) |
+
+The frontend uses `/chat/stream`, so text appears while the model is still writing.
+
 ## Architecture
 
 The backend follows a hexagonal (ports and adapters) layout. Dependencies point inward: `domain` and `application` never import FastAPI, the Anthropic SDK or environment variables.
@@ -40,7 +50,7 @@ Frontend:
     npm install
     npm run dev
 
-Tests: `cd backend && python -m pytest`
+Tests: `cd backend && python -m pytest` (backend) and `cd frontend && npm test` (frontend, Vitest + Testing Library)
 
 ## Roadmap
 - [x] Day 1-4: FastAPI + chat endpoint + LLM integration (tests)
@@ -50,6 +60,6 @@ Tests: `cd backend && python -m pytest`
 - [x] GitHub Actions CI (backend tests, frontend build)
 - [x] Hexagonal architecture with a provider-neutral LLM port
 - [x] Claude Haiku 5.5 + SDK upgrade
-- [ ] Streaming replies (SSE)
+- [x] Streaming replies (SSE)
 - [ ] Postgres persistence (Neon)
 - [ ] Free deploy on Vercel
