@@ -231,17 +231,17 @@ npm run dev
 
 Ports make most tests fast and offline: the agent runs against scripted fake models, so no test needs an API key.
 
-## Deployment (planned)
+## Deployment
 
-The target is a free, portfolio-grade setup:
+A free, portfolio-grade setup on two Vercel projects (Hobby plan) linked to the same GitHub repository:
 
 | Component | Platform | Status |
 |---|---|---|
 | Database | Neon Postgres, AWS us-east-1, free plan | Done |
-| Frontend | Vercel (static Vite build) | Pending |
-| Backend | Vercel (FastAPI as a Python function, same region as the database) | Pending |
+| Frontend | Vercel project `ai-support-assistant`, root `frontend/`, static Vite build | Live: https://ai-support-assistant-sigma.vercel.app |
+| Backend | Vercel project `ai-support-assistant-api`, root `backend/`, FastAPI as a Python function in `iad1` | Live: https://ai-support-assistant-api.vercel.app |
 
-Keeping the function and the database in the same region keeps every query a short round trip.
+Keeping the function and the database in the same region keeps every query a short round trip. `VITE_API_URL` (frontend) and `CORS_ORIGINS` (backend) point each project at the other; secrets (`DATABASE_URL`, `ANTHROPIC_API_KEY`) are set as sensitive variables in the Vercel dashboard. Vercel reads the Python version from `backend/.python-version` and installs only `backend/requirements.txt`; test tools live in `requirements-dev.txt`.
 
 ## Where to go next
 
