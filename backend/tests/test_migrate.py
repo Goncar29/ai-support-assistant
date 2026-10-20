@@ -14,7 +14,8 @@ def test_migrate_creates_the_schema_when_configured(monkeypatch, capsys):
     monkeypatch.setattr(migrate, "load_dotenv", lambda: None)
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db.test/app")
     monkeypatch.setattr(migrate.PostgresTicketRepository, "create_schema", lambda self: created.append(self))
+    monkeypatch.setattr(migrate.PostgresRateLimiter, "create_schema", lambda self: created.append(self))
 
     assert migrate.main() == 0
-    assert len(created) == 1
+    assert [type(c).__name__ for c in created] == ["PostgresTicketRepository", "PostgresRateLimiter"]
     assert "Schema is up to date." in capsys.readouterr().out

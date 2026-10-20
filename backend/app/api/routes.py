@@ -2,17 +2,18 @@ import json
 import logging
 from typing import Iterator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.application.conversation import TextDelta
-from app.application.ports import ChatUseCase, ReplyFinished, ToolStarted
+from app.application.ports import ChatUseCase, RateLimiter, ReplyFinished, ToolStarted
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 STREAM_ERROR_MESSAGE = "Something went wrong. Please try again."
+RATE_LIMIT_MESSAGE = "Too many requests. Please try again later."
 
 
 class ChatRequest(BaseModel):
@@ -23,18 +24,43 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+def client_ip(request: Request) -> str:
+    if request.app.state.trust_forwarded_for:
+        # The proxy overwrites the header; its first entry is the original client.
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return request.client.host if request.client else "unknown"
+
+
+def enforce_rate_limit(request: Request) -> None:
+    """Every chat request costs model tokens, so each client gets a budget per time window."""
+    limiter: RateLimiter = request.app.state.rate_limiter
+    try:
+        decision = limiter.hit("chat:%s" % client_ip(request))
+    except Exception:  # fail open: a limiter outage must not take the chat down with it
+        logger.exception("rate limiter failed; allowing the request")
+        return
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=RATE_LIMIT_MESSAGE,
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+
+
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_rate_limit)])
 def chat(body: ChatRequest, request: Request) -> ChatResponse:
     chat: ChatUseCase = request.app.state.chat
     return ChatResponse(reply=chat.reply(body.message))
 
 
-@router.post("/chat/stream")
+@router.post("/chat/stream", dependencies=[Depends(enforce_rate_limit)])
 def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     """Server-Sent Events: `delta` text chunks, `tool` activity, then `done` (or `error`)."""
     chat: ChatUseCase = request.app.state.chat

@@ -23,6 +23,12 @@ export function parseSseFrames(buffer: string): { events: ChatStreamEvent[]; res
   return { events, rest };
 }
 
+function rateLimitMessage(retryAfter: string | null): string {
+  const seconds = Number(retryAfter);
+  const wait = retryAfter && Number.isInteger(seconds) && seconds > 0 ? `${seconds} seconds` : "a moment";
+  return `Too many messages. Please wait ${wait} and try again.`;
+}
+
 /** POSTs the message and invokes `onEvent` for every server-sent event as it arrives. */
 export async function streamChat(
   message: string,
@@ -35,6 +41,7 @@ export async function streamChat(
     body: JSON.stringify({ message }),
     signal,
   });
+  if (res.status === 429) throw new Error(rateLimitMessage(res.headers.get("Retry-After")));
   if (!res.ok || !res.body) throw new Error(`Request failed (${res.status})`);
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();

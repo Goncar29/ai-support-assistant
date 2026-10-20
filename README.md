@@ -29,7 +29,7 @@ Requirements: Python 3.14 (pinned in `backend/.python-version`) and Node 22+.
     cd backend
     py -3.14 -m venv .venv && .venv\Scripts\activate
     pip install -r requirements-dev.txt   # runtime deps + pytest; Vercel installs only requirements.txt
-    python -m app.migrate                 # once, only when DATABASE_URL is set: creates the tickets table
+    python -m app.migrate                 # once, only when DATABASE_URL is set: creates the tickets and rate_limits tables
     python -m uvicorn app.main:app --reload --env-file .env
 
 Put secrets in `backend/.env` (git-ignored), one `NAME=value` per line; real environment variables take precedence.
@@ -54,6 +54,8 @@ Backend (all optional):
 | `DATABASE_URL` | Postgres connection string (use Neon's pooled `-pooler` host); without it tickets live in memory and are lost on restart | unset (in-memory) |
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
+| `RATE_LIMIT_REQUESTS` | Chat requests each client (IP) may make per window, across `/chat` and `/chat/stream`; counted in Postgres when `DATABASE_URL` is set, otherwise in memory per process | `10` |
+| `RATE_LIMIT_WINDOW_SECONDS` | Length of the rate-limit window | `60` |
 
 Frontend:
 
@@ -89,6 +91,8 @@ Vercel reads the Python version from `backend/.python-version` and installs only
 
 The frontend uses `/chat/stream`, so text appears while the model is still writing.
 
+Both chat endpoints are rate limited per client IP. Over the limit they answer `429` with `{"detail": "Too many requests. Please try again later."}` and a `Retry-After` header (seconds). On Vercel the client IP comes from `X-Forwarded-For`, which Vercel overwrites; elsewhere it comes from the connection, so a client cannot dodge the limit by sending its own header.
+
 ## Tests
 
 | Command | Covers |
@@ -109,5 +113,6 @@ The frontend uses `/chat/stream`, so text appears while the model is still writi
 - [x] Streaming replies (SSE)
 - [x] Postgres persistence (Neon)
 - [x] Free deploy on Vercel
+- [x] Per-IP rate limit on the chat endpoints
 - [ ] Live Claude in the demo (needs API credits)
 - [ ] A second LLM provider behind the same port

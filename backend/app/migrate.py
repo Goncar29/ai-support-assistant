@@ -8,7 +8,7 @@ import sys
 from dotenv import load_dotenv
 
 from app.config import Settings
-from app.infrastructure.postgres import PostgresTicketRepository
+from app.infrastructure.postgres import PostgresRateLimiter, PostgresTicketRepository
 
 
 def main() -> int:
@@ -18,6 +18,9 @@ def main() -> int:
         print("DATABASE_URL is not set; nothing to migrate.", file=sys.stderr)
         return 1
     PostgresTicketRepository(settings.database_url).create_schema()
+    PostgresRateLimiter(
+        settings.database_url, settings.rate_limit_requests, settings.rate_limit_window_seconds
+    ).create_schema()
     print("Schema is up to date.")
     return 0
 

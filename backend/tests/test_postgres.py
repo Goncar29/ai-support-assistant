@@ -10,7 +10,7 @@ import uuid
 import pytest
 
 from app.domain.ticket import Ticket
-from app.infrastructure.postgres import PostgresTicketRepository
+from app.infrastructure.postgres import PostgresRateLimiter, PostgresTicketRepository
 
 DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 
@@ -48,3 +48,39 @@ def test_create_schema_is_idempotent(schema):
     repo.create_schema()
 
     assert repo.list() == [ticket]
+
+
+def test_rate_limit_is_shared_across_limiter_instances(schema):
+    clock = lambda: 1000.0
+    first = PostgresRateLimiter(DATABASE_URL, limit=2, window_seconds=60, schema=schema, clock=clock)
+    first.create_schema()
+    # A second instance simulates another serverless instance with its own memory.
+    second = PostgresRateLimiter(DATABASE_URL, limit=2, window_seconds=60, schema=schema, clock=clock)
+
+    assert first.hit("ip").allowed
+    assert second.hit("ip").allowed
+    denied = first.hit("ip")
+    assert not denied.allowed
+    assert denied.retry_after_seconds == 20
+    assert second.hit("other-ip").allowed
+
+
+def test_rate_limit_resets_in_the_next_window(schema):
+    now = [1000.0]
+    limiter = PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0])
+    limiter.create_schema()
+    assert limiter.hit("ip").allowed
+    assert not limiter.hit("ip").allowed
+    now[0] = 1020.0
+    assert limiter.hit("ip").allowed
+
+
+def test_concurrent_hits_never_exceed_the_limit(schema):
+    from concurrent.futures import ThreadPoolExecutor
+
+    limiter = PostgresRateLimiter(DATABASE_URL, limit=5, window_seconds=60, schema=schema, clock=lambda: 1000.0)
+    limiter.create_schema()
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        decisions = list(pool.map(lambda _: limiter.hit("ip"), range(10)))
+
+    assert sum(d.allowed for d in decisions) == 5

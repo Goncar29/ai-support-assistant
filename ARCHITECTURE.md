@@ -218,6 +218,27 @@ Design decisions:
 - **`connect_timeout` of 5 s.** On the free plan Neon suspends the compute after 5 minutes idle; the first query wakes it up, and a database that is really down fails fast.
 - **No connection and no DDL at startup.** Cold starts stay fast and the API boots even if the database is down; the schema is created by an explicit migration command.
 
+## Rate limiting
+
+Every chat request costs model tokens, so `/chat` and `/chat/stream` share one budget per client IP: `RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS` (10 per minute by default). Over the budget the API answers `429` with a `Retry-After` header, and the frontend shows "Too many messages. Please wait N seconds and try again."
+
+It follows the same ports-and-adapters shape as tickets: the `RateLimiter` port lives in `application/ports.py`, the window math in `domain/rate_limit.py`, and `main.build_rate_limiter` picks the adapter.
+
+| | `PostgresRateLimiter` (`DATABASE_URL` set) | `InMemoryRateLimiter` (default) |
+|---|---|---|
+| Counts shared by | Every serverless instance | One process only |
+| Used for | Production | Tests, local development |
+
+Table `rate_limits` (created by `python -m app.migrate`): `key TEXT` primary key, `window_start BIGINT`, `count INTEGER`; one row per client, reused window after window.
+
+Design decisions:
+
+- **Why not count in memory in production?** On Vercel each request may land on a different instance, each with its own memory, so an in-memory limit would not hold. The count has to live outside the process; Neon is already there, so no new service is needed.
+- **Fixed window with one atomic upsert.** `INSERT ... ON CONFLICT (key) DO UPDATE` either starts a new window at 1 or increments the current one in a single statement, so two concurrent requests can never read the same count (an integration test fires 10 at once with a limit of 5 and expects exactly 5). The tradeoff of a fixed window: a client can send up to twice the limit across a window boundary, which is acceptable for cost protection.
+- **Which IP?** `X-Forwarded-For` is only trusted when `VERCEL=1` (Vercel overwrites that header, so clients cannot spoof it). Anywhere else the IP comes from the connection; otherwise a client could send a new fake IP with every request.
+- **Fail open.** If the limiter itself fails (for example the database is down), the request goes through and the error is logged: the limiter protects the budget, it must not take the chat down. Set a spend limit in the Anthropic Console as the hard backstop.
+- **CORS.** `Retry-After` is not a CORS-safelisted header, so the API lists it in `Access-Control-Expose-Headers`; otherwise the browser would hide it from the frontend.
+
 ## Configuration
 
 Every setting is read in `backend/app/config.py`. Locally, put them in `backend/.env` (git-ignored); in production, set them in the hosting platform.
@@ -230,6 +251,8 @@ Every setting is read in `backend/app/config.py`. Locally, put them in `backend/
 | `DATABASE_URL` | Neon pooled connection string | unset → in-memory |
 | `N8N_WEBHOOK_URL` | Ticket notification webhook | unset → no notification |
 | `CORS_ORIGINS` | Origins allowed to call the API | `http://localhost:5173` |
+| `RATE_LIMIT_REQUESTS` | Chat requests per client IP per window | `10` |
+| `RATE_LIMIT_WINDOW_SECONDS` | Rate-limit window length | `60` |
 
 Frontend: `VITE_API_URL` points to the backend (default `http://localhost:8000`).
 
