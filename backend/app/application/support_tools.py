@@ -6,6 +6,8 @@ from app.application.ports import FaqRepository, TicketNotifier, TicketRepositor
 
 logger = logging.getLogger(__name__)
 
+TOOL_FAILURE_MESSAGE = "Error: the tool failed due to a temporary problem; it did not complete."
+
 TOOL_SPECS: Tuple[ToolSpec, ...] = (
     ToolSpec(
         name="search_faq",
@@ -52,6 +54,9 @@ class SupportTools:
             return ToolResult(call.id, handler(**call.arguments))
         except TypeError as exc:
             return ToolResult(call.id, "Error: invalid arguments (%s)." % exc, is_error=True)
+        except Exception:  # an adapter failed (e.g. the database is down): let the model tell the user
+            logger.exception("tool %s failed", call.name)
+            return ToolResult(call.id, TOOL_FAILURE_MESSAGE, is_error=True)
 
     def _search_faq(self, query: str) -> str:
         hits = self._faq.search(query)

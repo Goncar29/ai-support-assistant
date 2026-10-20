@@ -132,7 +132,7 @@ sequenceDiagram
    - anything else → emit `ReplyFinished` with the final text and stop.
 4. After `MAX_STEPS` (5) model turns without a final answer, give up with a fixed apology.
 
-Safety nets: the final reply is never empty (an empty turn becomes an apology, a refusal becomes a polite refusal), unknown tools or bad arguments come back to the model as error results instead of crashing, and a failed n8n notification never undoes the ticket.
+Safety nets: the final reply is never empty (an empty turn becomes an apology, a refusal becomes a polite refusal), unknown tools, bad arguments and failing adapters (for example the database being down) come back to the model as error results, so it can tell the user instead of the request crashing, and a failed n8n notification never undoes the ticket.
 
 ### Tools
 
@@ -187,7 +187,7 @@ Design decisions:
 
 - **One short-lived connection per operation, no in-process pool.** On serverless an instance can be frozen or discarded at any time; Neon's pooled endpoint (`-pooler` host, PgBouncer) does the pooling server-side.
 - **`prepare_threshold=None`.** PgBouncer in transaction mode cannot keep server-side prepared statements.
-- **`connect_timeout` of 10 s.** On the free plan Neon suspends the compute after 5 minutes idle; the first query wakes it up.
+- **`connect_timeout` of 5 s.** On the free plan Neon suspends the compute after 5 minutes idle; the first query wakes it up, and a database that is really down fails fast.
 - **No connection and no DDL at startup.** Cold starts stay fast and the API boots even if the database is down; the schema is created by an explicit migration command.
 
 ## Configuration

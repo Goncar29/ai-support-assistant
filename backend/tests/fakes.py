@@ -32,3 +32,13 @@ class RecordingNotifier:
             raise RuntimeError("notifier down")
         self.sent.append(ticket)
         return True
+
+
+class FailingTicketRepository:
+    """TicketRepository whose storage is down, like an unreachable database."""
+
+    def create(self, title: str, description: str) -> Ticket:
+        raise ConnectionError("database unreachable")
+
+    def list(self) -> List[Ticket]:
+        raise ConnectionError("database unreachable")

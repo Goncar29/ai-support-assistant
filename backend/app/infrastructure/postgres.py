@@ -11,7 +11,7 @@ from psycopg import sql
 
 from app.domain.ticket import Ticket
 
-CONNECT_TIMEOUT_SECONDS = 10  # Neon may need a few seconds to wake a suspended compute.
+CONNECT_TIMEOUT_SECONDS = 5  # enough to wake a suspended Neon compute; fail fast when the database is down
 
 
 def format_ticket_id(number: int) -> str:
