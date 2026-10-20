@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Iterator, List, Protocol, Sequence, Union, runtime_checkable
 
 from app.application.conversation import LLMEvent, Message, TextDelta, ToolSpec
+from app.domain.rate_limit import RateLimitDecision
 from app.domain.ticket import Ticket
 
 
@@ -63,3 +64,8 @@ class FaqRepository(Protocol):
 class TicketNotifier(Protocol):
     def ticket_created(self, ticket: Ticket) -> bool:
         """Announce a new ticket. Returns whether the notification was delivered."""
+
+
+class RateLimiter(Protocol):
+    def hit(self, key: str) -> RateLimitDecision:
+        """Count one request for `key` and say whether it fits in the current window."""
