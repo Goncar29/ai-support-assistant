@@ -16,6 +16,7 @@ class Settings:
     n8n_webhook_url: Optional[str] = None
     cors_origins: Tuple[str, ...] = DEFAULT_CORS_ORIGINS
     anthropic_effort: str = DEFAULT_EFFORT
+    database_url: Optional[str] = None
 
     def __post_init__(self) -> None:
         # Fail at startup, not on the first chat request.
@@ -33,4 +34,5 @@ class Settings:
             n8n_webhook_url=env.get("N8N_WEBHOOK_URL") or None,
             cors_origins=origins or DEFAULT_CORS_ORIGINS,
             anthropic_effort=env.get("ANTHROPIC_EFFORT") or DEFAULT_EFFORT,
+            database_url=env.get("DATABASE_URL") or None,
         )

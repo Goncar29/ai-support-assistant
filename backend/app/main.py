@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
-from app.application.ports import LLMProvider, TicketNotifier
+from app.application.ports import LLMProvider, TicketNotifier, TicketRepository
 from app.application.support_agent import SupportAgent
 from app.application.support_tools import SupportTools
 from app.config import Settings
@@ -27,8 +27,16 @@ def build_notifier(settings: Settings) -> TicketNotifier:
     return N8nNotifier(settings.n8n_webhook_url) if settings.n8n_webhook_url else NullNotifier()
 
 
+def build_ticket_repository(settings: Settings) -> TicketRepository:
+    if not settings.database_url:
+        return InMemoryTicketRepository()
+    from app.infrastructure.postgres import PostgresTicketRepository
+
+    return PostgresTicketRepository(settings.database_url)
+
+
 def build_agent(settings: Settings) -> SupportAgent:
-    tools = SupportTools(InMemoryFaqRepository(DEFAULT_FAQ), InMemoryTicketRepository(), build_notifier(settings))
+    tools = SupportTools(InMemoryFaqRepository(DEFAULT_FAQ), build_ticket_repository(settings), build_notifier(settings))
     return SupportAgent(build_llm(settings), tools)
 
 
