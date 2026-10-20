@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.application.conversation import TextDelta
-from app.application.support_agent import ReplyFinished, SupportAgent, ToolStarted
+from app.application.ports import ChatUseCase, ReplyFinished, ToolStarted
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,24 +30,24 @@ def health() -> dict:
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(body: ChatRequest, request: Request) -> ChatResponse:
-    agent: SupportAgent = request.app.state.agent
-    return ChatResponse(reply=agent.reply(body.message))
+    chat: ChatUseCase = request.app.state.chat
+    return ChatResponse(reply=chat.reply(body.message))
 
 
 @router.post("/chat/stream")
 def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     """Server-Sent Events: `delta` text chunks, `tool` activity, then `done` (or `error`)."""
-    agent: SupportAgent = request.app.state.agent
+    chat: ChatUseCase = request.app.state.chat
     return StreamingResponse(
-        _sse_events(agent, body.message),
+        _sse_events(chat, body.message),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _sse_events(agent: SupportAgent, message: str) -> Iterator[str]:
+def _sse_events(chat: ChatUseCase, message: str) -> Iterator[str]:
     try:
-        for event in agent.run(message):
+        for event in chat.run(message):
             if isinstance(event, TextDelta):
                 yield _sse("delta", {"text": event.text})
             elif isinstance(event, ToolStarted):

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
-from app.application.ports import LLMProvider, TicketNotifier, TicketRepository
+from app.application.ports import ChatUseCase, LLMProvider, TicketNotifier, TicketRepository
 from app.application.support_agent import SupportAgent
 from app.application.support_tools import SupportTools
 from app.config import Settings
@@ -35,7 +35,7 @@ def build_ticket_repository(settings: Settings) -> TicketRepository:
     return PostgresTicketRepository(settings.database_url)
 
 
-def build_agent(settings: Settings) -> SupportAgent:
+def build_chat(settings: Settings) -> ChatUseCase:
     tools = SupportTools(InMemoryFaqRepository(DEFAULT_FAQ), build_ticket_repository(settings), build_notifier(settings))
     return SupportAgent(build_llm(settings), tools)
 
@@ -48,7 +48,7 @@ def create_app(settings: Settings) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.state.agent = build_agent(settings)
+    app.state.chat = build_chat(settings)  # the API only sees the ChatUseCase port
     app.include_router(router)
     return app
 
