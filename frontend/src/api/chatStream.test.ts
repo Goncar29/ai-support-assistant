@@ -68,6 +68,14 @@ describe("streamChat", () => {
     );
   });
 
+  it("uses the singular for a one-second wait", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 429, headers: { "Retry-After": "1" } })),
+    );
+    await expect(streamChat("hola", () => {})).rejects.toThrow("Too many messages. Please wait 1 second and try again.");
+  });
+
   it("still explains a rate limit when Retry-After is not readable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 429 })));
     await expect(streamChat("hola", () => {})).rejects.toThrow(

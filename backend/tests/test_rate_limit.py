@@ -67,6 +67,14 @@ def test_chat_and_stream_share_one_budget():
     assert client.post("/chat/stream", json={"message": "hi"}).status_code == 429
 
 
+def test_invalid_requests_also_consume_the_budget():
+    # The limit runs before body validation, so spamming malformed requests is not free.
+    client = make_client(rate_limit_requests=2)
+    assert client.post("/chat", json={"message": ""}).status_code == 422
+    assert client.post("/chat", json={}).status_code == 422
+    assert client.post("/chat", json={"message": "hi"}).status_code == 429
+
+
 def test_health_is_not_rate_limited():
     client = make_client(rate_limit_requests=1)
     assert all(client.get("/health").status_code == 200 for _ in range(3))

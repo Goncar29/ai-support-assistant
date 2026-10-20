@@ -25,7 +25,8 @@ export function parseSseFrames(buffer: string): { events: ChatStreamEvent[]; res
 
 function rateLimitMessage(retryAfter: string | null): string {
   const seconds = Number(retryAfter);
-  const wait = retryAfter && Number.isInteger(seconds) && seconds > 0 ? `${seconds} seconds` : "a moment";
+  const valid = retryAfter && Number.isInteger(seconds) && seconds > 0;
+  const wait = valid ? `${seconds} ${seconds === 1 ? "second" : "seconds"}` : "a moment";
   return `Too many messages. Please wait ${wait} and try again.`;
 }
 
