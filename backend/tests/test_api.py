@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 from app.application.conversation import TextDelta
 from app.application.support_agent import ReplyFinished, ToolStarted
 from app.config import Settings
-from app.main import build_notifier, create_app
+from app.main import build_notifier, build_ticket_repository, create_app
+from app.infrastructure.in_memory import InMemoryTicketRepository
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
+from app.infrastructure.postgres import PostgresTicketRepository
 
 
 def make_client(**settings):
@@ -107,3 +109,15 @@ def test_settings_reject_unknown_effort():
 def test_notifier_is_n8n_only_when_url_is_configured():
     assert isinstance(build_notifier(Settings(n8n_webhook_url=None)), NullNotifier)
     assert isinstance(build_notifier(Settings(n8n_webhook_url="http://n8n.test/hook")), N8nNotifier)
+
+
+def test_settings_read_database_url():
+    assert Settings.from_env({"DATABASE_URL": "postgresql://u:p@db.test/app"}).database_url == "postgresql://u:p@db.test/app"
+    assert Settings.from_env({"DATABASE_URL": ""}).database_url is None
+
+
+def test_tickets_use_postgres_only_when_database_url_is_configured():
+    assert isinstance(build_ticket_repository(Settings()), InMemoryTicketRepository)
+    # Building the adapter must not open a connection: cold starts stay fast and the app boots without the DB.
+    repo = build_ticket_repository(Settings(database_url="postgresql://u:p@unreachable.invalid/app"))
+    assert isinstance(repo, PostgresTicketRepository)

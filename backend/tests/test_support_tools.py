@@ -1,8 +1,8 @@
 from app.application.conversation import ToolCall, ToolResult
-from app.application.support_tools import SupportTools
+from app.application.support_tools import TOOL_FAILURE_MESSAGE, SupportTools
 from app.domain.ticket import Ticket
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
-from tests.fakes import RecordingNotifier
+from tests.fakes import FailingTicketRepository, RecordingNotifier
 
 
 def make_tools(notifier=None):
@@ -42,3 +42,13 @@ def test_unknown_tool_and_bad_arguments_are_errors():
     bad_args = tools.execute(ToolCall("2", "search_faq", {"wrong": 1}))
     assert unknown.is_error and "unknown tool" in unknown.content
     assert bad_args.is_error and "invalid arguments" in bad_args.content
+
+
+def test_storage_failure_becomes_a_tool_error_the_model_can_explain():
+    notifier = RecordingNotifier()
+    tools = SupportTools(InMemoryFaqRepository(DEFAULT_FAQ), FailingTicketRepository(), notifier)
+
+    result = tools.execute(ToolCall("1", "create_ticket", {"title": "t", "description": "d"}))
+
+    assert result == ToolResult("1", TOOL_FAILURE_MESSAGE, is_error=True)
+    assert notifier.sent == []
