@@ -98,7 +98,7 @@ def rate_limit_keys(schema):
 def test_rate_limit_prunes_rows_from_past_windows(schema):
     now = [1000.0]
     limiter = PostgresRateLimiter(
-        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 0.0
     )
     limiter.create_schema()
     limiter.hit("old-ip")
@@ -119,7 +119,7 @@ def test_rate_limit_prunes_only_on_a_fraction_of_hits(schema):
         schema=schema,
         clock=lambda: now[0],
         prune_probability=0.01,
-        random=lambda: 0.5,
+        rng=lambda: 0.5,
     )
     limiter.create_schema()
     limiter.hit("old-ip")
@@ -133,7 +133,7 @@ def test_rate_limit_prunes_only_on_a_fraction_of_hits(schema):
 def test_rate_limit_prune_keeps_the_previous_window_as_a_clock_skew_margin(schema):
     now = [1000.0]
     limiter = PostgresRateLimiter(
-        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 0.0
     )
     limiter.create_schema()
     limiter.hit("previous-window-ip")  # window 960
@@ -152,7 +152,7 @@ def test_rate_limit_prune_deletes_at_most_one_batch(schema):
         window_seconds=60,
         schema=schema,
         clock=lambda: now[0],
-        random=lambda: 1.0,  # no prune while seeding
+        rng=lambda: 1.0,  # no prune while seeding
         prune_batch_size=2,
     )
     limiter.create_schema()
@@ -160,7 +160,7 @@ def test_rate_limit_prune_deletes_at_most_one_batch(schema):
         limiter.hit(key)
     now[0] = 1100.0
     pruning = PostgresRateLimiter(
-        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0,
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 0.0,
         prune_batch_size=2,
     )
 
@@ -182,7 +182,7 @@ def test_a_failed_prune_keeps_the_decision(schema, caplog):
 
     PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema).create_schema()
     limiter = PostgresRateLimiter(
-        DATABASE_URL, limit=0, window_seconds=60, schema=schema, clock=lambda: 1000.0, random=drop_table_then_prune
+        DATABASE_URL, limit=0, window_seconds=60, schema=schema, clock=lambda: 1000.0, rng=drop_table_then_prune
     )
 
     with caplog.at_level("ERROR", logger="app.infrastructure.postgres"):
@@ -219,3 +219,47 @@ def test_rate_limit_schema_indexes_window_start_also_on_an_existing_table(schema
         ]
     assert any("(window_start)" in d for d in indexdefs), indexdefs
     assert limiter.hit("ip").allowed
+
+
+def test_a_prune_skips_rows_locked_by_a_concurrent_hit(schema):
+    import threading
+
+    import psycopg
+    from psycopg import sql
+
+    now = [1000.0]
+    seeding = PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 1.0)
+    seeding.create_schema()
+    seeding.hit("locked-ip")
+    seeding.hit("free-ip")
+    now[0] = 1100.0
+    pruning = PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 0.0)
+
+    outcome = {}
+
+    def pruning_hit():
+        try:
+            outcome["decision"] = pruning.hit("new-ip")
+        except Exception as error:  # surfaced below instead of as a lock-wait failure
+            outcome["error"] = error
+
+    worker = threading.Thread(target=pruning_hit)
+    holder = psycopg.connect(DATABASE_URL, prepare_threshold=None)
+    try:
+        # Another request is in the middle of updating this stale row.
+        holder.execute(
+            sql.SQL("SELECT 1 FROM {} WHERE key = 'locked-ip' FOR UPDATE").format(sql.Identifier(schema, "rate_limits"))
+        )
+        worker.start()
+        worker.join(timeout=5)
+
+        assert not worker.is_alive(), "the prune waited on a row another request holds"
+    finally:
+        holder.rollback()
+        holder.close()
+        if worker.is_alive():
+            worker.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    assert outcome["decision"].allowed
+    assert rate_limit_keys(schema) == ["locked-ip", "new-ip"]

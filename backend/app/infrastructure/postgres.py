@@ -89,7 +89,7 @@ class PostgresRateLimiter:
         clock: Callable[[], float] = time.time,
         prune_probability: float = PRUNE_PROBABILITY,
         prune_batch_size: int = PRUNE_BATCH_SIZE,
-        random: Callable[[], float] = random.random,
+        rng: Callable[[], float] = random.random,
     ):
         self._database_url = database_url
         self._limit = limit
@@ -97,7 +97,7 @@ class PostgresRateLimiter:
         self._clock = clock
         self._prune_probability = prune_probability
         self._prune_batch_size = prune_batch_size
-        self._random = random
+        self._rng = rng
         self._table = sql.Identifier(schema, "rate_limits")
         self._schema = sql.Identifier(schema)
 
@@ -135,7 +135,7 @@ class PostgresRateLimiter:
                 (key, start),
             ).fetchone()
             conn.commit()  # release the row lock before pruning, so a prune never waits on its own hit
-            if self._random() < self._prune_probability:
+            if self._rng() < self._prune_probability:
                 self._prune(conn, start)
         return decide(row[0], self._limit, retry_after)
 

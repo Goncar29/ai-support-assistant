@@ -24,7 +24,7 @@ flowchart LR
 | LLM | Claude Haiku 5.5 via the Anthropic SDK; offline echo fallback | `backend/app/infrastructure/llm/` |
 | Persistence | Postgres (Neon) via psycopg 3; in-memory fallback | `backend/app/infrastructure/` |
 | Notifications | n8n webhook, best-effort | `backend/app/infrastructure/notifications.py`, `n8n/` |
-| CI | GitHub Actions: backend tests, frontend lint + tests + build | `.github/workflows/` |
+| CI | GitHub Actions: backend tests (including Postgres integration against a `postgres:17` service), frontend lint + tests + build | `.github/workflows/` |
 
 ## The layers
 
@@ -277,7 +277,7 @@ npm run dev
 | Suite | Command | What it covers |
 |---|---|---|
 | Backend unit + API | `cd backend && python -m pytest` | Agent loop with fake LLMs, tools, SSE framing, settings, adapter selection, Anthropic adapter translation, and the layer dependency rules (`test_architecture.py`) |
-| Postgres integration | same, with `TEST_DATABASE_URL` set | Real database, each run in a throwaway schema that is dropped afterwards |
+| Postgres integration | same, with `TEST_DATABASE_URL` set | Real database, each run in a throwaway schema that is dropped afterwards; CI runs them against a `postgres:17` service |
 | Frontend | `cd frontend && npm test` | SSE parser (split frames, errors) and the `useChat` hook |
 
 Ports make most tests fast and offline: the agent runs against scripted fake models, so no test needs an API key.
