@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.application.conversation import TextDelta
 from app.application.ports import ChatUseCase, RateLimiter, ReplyFinished, ToolStarted
+from app.domain.rate_limit import client_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,7 +38,7 @@ def enforce_rate_limit(request: Request) -> None:
     """Every chat request costs model tokens, so each client gets a budget per time window."""
     limiter: RateLimiter = request.app.state.rate_limiter
     try:
-        decision = limiter.hit("chat:%s" % client_ip(request))
+        decision = limiter.hit("chat:%s" % client_key(client_ip(request)))
     except Exception:  # fail open: a limiter outage must not take the chat down with it
         logger.exception("rate limiter failed; allowing the request")
         return

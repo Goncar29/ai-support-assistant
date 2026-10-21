@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.domain.rate_limit import client_key
 from app.infrastructure.in_memory import InMemoryRateLimiter
 from app.infrastructure.postgres import PostgresRateLimiter
 from app.main import build_rate_limiter, create_app
@@ -101,6 +102,32 @@ def test_forwarded_for_identifies_the_client_only_when_trusted():
     untrusted = make_client(rate_limit_requests=1)
     assert untrusted.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 200
     assert untrusted.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": "2.2.2.2"}).status_code == 429
+
+
+@pytest.mark.parametrize(
+    "ip, key",
+    [
+        ("203.0.113.7", "203.0.113.7"),  # IPv4: one key per address
+        ("2001:db8:abcd:12:1a2b:3c4d:5e6f:7a8b", "2001:db8:abcd:12::/64"),  # IPv6: one key per /64
+        ("2001:DB8:ABCD:0012:0000:0000:0000:0001", "2001:db8:abcd:12::/64"),  # any spelling of it
+        ("::ffff:203.0.113.7", "203.0.113.7"),  # IPv4-mapped IPv6 is the IPv4 client
+        ("testclient", "testclient"),  # not an IP: used as is
+        ("unknown", "unknown"),
+    ],
+)
+def test_client_key_groups_ipv6_by_64_prefix(ip, key):
+    assert client_key(ip) == key
+
+
+def test_ipv6_clients_in_one_64_share_a_budget():
+    client = make_client(rate_limit_requests=1, trust_forwarded_for=True)
+    same_64 = ["2001:db8:abcd:12::1", "2001:db8:abcd:12:ffff:ffff:ffff:ffff"]
+    other_64 = "2001:db8:abcd:13::1"
+
+    assert client.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": same_64[0]}).status_code == 200
+    # Rotating the interface bits no longer buys a fresh budget.
+    assert client.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": same_64[1]}).status_code == 429
+    assert client.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": other_64}).status_code == 200
 
 
 def test_a_broken_limiter_does_not_take_the_chat_down():
