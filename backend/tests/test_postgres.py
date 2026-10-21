@@ -235,20 +235,31 @@ def test_a_prune_skips_rows_locked_by_a_concurrent_hit(schema):
     now[0] = 1100.0
     pruning = PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], rng=lambda: 0.0)
 
+    outcome = {}
+
+    def pruning_hit():
+        try:
+            outcome["decision"] = pruning.hit("new-ip")
+        except Exception as error:  # surfaced below instead of as a lock-wait failure
+            outcome["error"] = error
+
+    worker = threading.Thread(target=pruning_hit)
     holder = psycopg.connect(DATABASE_URL, prepare_threshold=None)
     try:
         # Another request is in the middle of updating this stale row.
         holder.execute(
             sql.SQL("SELECT 1 FROM {} WHERE key = 'locked-ip' FOR UPDATE").format(sql.Identifier(schema, "rate_limits"))
         )
-        done = threading.Event()
-        worker = threading.Thread(target=lambda: (pruning.hit("new-ip"), done.set()))
         worker.start()
         worker.join(timeout=5)
 
-        assert done.is_set(), "the prune waited on a row another request holds"
+        assert not worker.is_alive(), "the prune waited on a row another request holds"
     finally:
         holder.rollback()
         holder.close()
-        worker.join()
+        if worker.is_alive():
+            worker.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    assert outcome["decision"].allowed
     assert rate_limit_keys(schema) == ["locked-ip", "new-ip"]
