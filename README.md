@@ -18,7 +18,7 @@ How it works (hexagonal layers, request flow, streaming, persistence): see [ARCH
 | Database | Postgres on Neon (psycopg 3); in-memory fallback |
 | Automation | n8n webhook on new tickets (optional) |
 | Hosting | Vercel (frontend + FastAPI function), Neon free plan |
-| CI | GitHub Actions: backend tests, frontend lint + tests + build |
+| CI | GitHub Actions: backend tests (including Postgres integration against a `postgres:17` service), frontend lint + tests + build |
 
 ## Run locally
 
@@ -107,7 +107,7 @@ Both chat endpoints are rate limited per client IP. Over the limit they answer `
 - [x] React chat UI
 - [x] Agent with tool use (`search_faq`, `create_ticket`)
 - [x] n8n webhook flow (set `N8N_WEBHOOK_URL`; import `n8n/ticket-notification.json`)
-- [x] GitHub Actions CI (backend tests, frontend lint + tests + build)
+- [x] GitHub Actions CI (backend tests with a Postgres service, frontend lint + tests + build)
 - [x] Hexagonal architecture with a provider-neutral LLM port
 - [x] Claude Haiku 5.5 + SDK upgrade
 - [x] Streaming replies (SSE)
