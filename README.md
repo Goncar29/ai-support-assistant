@@ -91,7 +91,7 @@ Vercel reads the Python version from `backend/.python-version` and installs only
 
 The frontend uses `/chat/stream`, so text appears while the model is still writing.
 
-Both chat endpoints are rate limited per client IP. Over the limit they answer `429` with `{"detail": "Too many requests. Please try again later."}` and a `Retry-After` header (seconds). On Vercel the client IP comes from `X-Forwarded-For`, which Vercel overwrites; elsewhere it comes from the connection, so a client cannot dodge the limit by sending its own header.
+Both chat endpoints are rate limited per client IP (per /64 network for IPv6, so rotating addresses inside one allocation does not reset the budget). Over the limit they answer `429` with `{"detail": "Too many requests. Please try again later."}` and a `Retry-After` header (seconds). On Vercel the client IP comes from `X-Forwarded-For`, which Vercel overwrites; elsewhere it comes from the connection, so a client cannot dodge the limit by sending its own header.
 
 ## Tests
 

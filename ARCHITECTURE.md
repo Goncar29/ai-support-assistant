@@ -220,7 +220,7 @@ Design decisions:
 
 ## Rate limiting
 
-Every chat request costs model tokens, so `/chat` and `/chat/stream` share one budget per client IP: `RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS` (10 per minute by default). Over the budget the API answers `429` with a `Retry-After` header, and the frontend shows "Too many messages. Please wait N seconds and try again."
+Every chat request costs model tokens, so `/chat` and `/chat/stream` share one budget per client IP: `RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS` (10 per minute by default). Over the budget the API answers `429` with a `Retry-After` header, and the frontend shows "Too many messages. Please wait N seconds and try again." An IPv6 client is keyed by its /64 network, not its full address: ISPs give each customer at least a /64, so keying by address would let one client rotate addresses for a fresh budget (IPv4 and IPv4-mapped addresses stay one key per address).
 
 It follows the same ports-and-adapters shape as tickets: the `RateLimiter` port lives in `application/ports.py`, the window math in `domain/rate_limit.py`, and `main.build_rate_limiter` picks the adapter.
 
