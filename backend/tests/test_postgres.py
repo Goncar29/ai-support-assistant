@@ -84,3 +84,138 @@ def test_concurrent_hits_never_exceed_the_limit(schema):
         decisions = list(pool.map(lambda _: limiter.hit("ip"), range(10)))
 
     assert sum(d.allowed for d in decisions) == 5
+
+
+def rate_limit_keys(schema):
+    import psycopg
+    from psycopg import sql
+
+    with psycopg.connect(DATABASE_URL, prepare_threshold=None) as conn:
+        rows = conn.execute(sql.SQL("SELECT key FROM {} ORDER BY key").format(sql.Identifier(schema, "rate_limits")))
+        return [key for (key,) in rows]
+
+
+def test_rate_limit_prunes_rows_from_past_windows(schema):
+    now = [1000.0]
+    limiter = PostgresRateLimiter(
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0
+    )
+    limiter.create_schema()
+    limiter.hit("old-ip")
+    now[0] = 1100.0  # next window
+
+    assert limiter.hit("new-ip").allowed
+    assert rate_limit_keys(schema) == ["new-ip"]
+    # The pruned client starts a fresh window, exactly as before pruning existed.
+    assert limiter.hit("old-ip").allowed
+
+
+def test_rate_limit_prunes_only_on_a_fraction_of_hits(schema):
+    now = [1000.0]
+    limiter = PostgresRateLimiter(
+        DATABASE_URL,
+        limit=1,
+        window_seconds=60,
+        schema=schema,
+        clock=lambda: now[0],
+        prune_probability=0.01,
+        random=lambda: 0.5,
+    )
+    limiter.create_schema()
+    limiter.hit("old-ip")
+    now[0] = 1100.0
+
+    limiter.hit("new-ip")
+
+    assert rate_limit_keys(schema) == ["new-ip", "old-ip"]
+
+
+def test_rate_limit_prune_keeps_the_previous_window_as_a_clock_skew_margin(schema):
+    now = [1000.0]
+    limiter = PostgresRateLimiter(
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0
+    )
+    limiter.create_schema()
+    limiter.hit("previous-window-ip")  # window 960
+    now[0] = 1030.0  # window 1020: 960 is only one window old
+
+    limiter.hit("new-ip")
+
+    assert rate_limit_keys(schema) == ["new-ip", "previous-window-ip"]
+
+
+def test_rate_limit_prune_deletes_at_most_one_batch(schema):
+    now = [1000.0]
+    limiter = PostgresRateLimiter(
+        DATABASE_URL,
+        limit=1,
+        window_seconds=60,
+        schema=schema,
+        clock=lambda: now[0],
+        random=lambda: 1.0,  # no prune while seeding
+        prune_batch_size=2,
+    )
+    limiter.create_schema()
+    for key in ("old-a", "old-b", "old-c"):
+        limiter.hit(key)
+    now[0] = 1100.0
+    pruning = PostgresRateLimiter(
+        DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: now[0], random=lambda: 0.0,
+        prune_batch_size=2,
+    )
+
+    pruning.hit("new-ip")
+
+    keys = rate_limit_keys(schema)
+    assert len(keys) == 2 and "new-ip" in keys  # two of the three old rows went, one waits for the next prune
+
+
+def test_a_failed_prune_keeps_the_decision(schema, caplog):
+    import psycopg
+    from psycopg import sql
+
+    def drop_table_then_prune():
+        # Runs between the committed hit and the prune, so the DELETE hits a missing table.
+        with psycopg.connect(DATABASE_URL, prepare_threshold=None) as conn:
+            conn.execute(sql.SQL("DROP TABLE {}").format(sql.Identifier(schema, "rate_limits")))
+        return 0.0
+
+    PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema).create_schema()
+    limiter = PostgresRateLimiter(
+        DATABASE_URL, limit=0, window_seconds=60, schema=schema, clock=lambda: 1000.0, random=drop_table_then_prune
+    )
+
+    with caplog.at_level("ERROR", logger="app.infrastructure.postgres"):
+        denied = limiter.hit("ip")
+
+    assert not denied.allowed
+    assert denied.retry_after_seconds == 20
+    assert "rate limit prune failed" in caplog.text
+
+
+def test_rate_limit_schema_indexes_window_start_also_on_an_existing_table(schema):
+    import psycopg
+    from psycopg import sql
+
+    # The table as the previous migration created it, without the index.
+    with psycopg.connect(DATABASE_URL, prepare_threshold=None) as conn:
+        conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+        conn.execute(
+            sql.SQL("CREATE TABLE {} (key TEXT PRIMARY KEY, window_start BIGINT NOT NULL, count INTEGER NOT NULL)").format(
+                sql.Identifier(schema, "rate_limits")
+            )
+        )
+    limiter = PostgresRateLimiter(DATABASE_URL, limit=1, window_seconds=60, schema=schema, clock=lambda: 1000.0)
+
+    limiter.create_schema()
+    limiter.create_schema()  # still idempotent
+
+    with psycopg.connect(DATABASE_URL, prepare_threshold=None) as conn:
+        indexdefs = [
+            row[0]
+            for row in conn.execute(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = %s AND tablename = 'rate_limits'", (schema,)
+            )
+        ]
+    assert any("(window_start)" in d for d in indexdefs), indexdefs
+    assert limiter.hit("ip").allowed
