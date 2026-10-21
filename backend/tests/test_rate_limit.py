@@ -171,3 +171,37 @@ def test_settings_reject_invalid_rate_limit_values(env):
 def test_rate_limiter_uses_postgres_only_when_database_url_is_configured():
     assert isinstance(build_rate_limiter(Settings()), InMemoryRateLimiter)
     assert isinstance(build_rate_limiter(Settings(database_url="postgresql://u:p@localhost/db")), PostgresRateLimiter)
+
+
+@pytest.fixture
+def recorded_connect_timeouts(monkeypatch):
+    import psycopg
+
+    import app.infrastructure.postgres as postgres
+
+    timeouts = []
+
+    def fake_connect(*args, connect_timeout=None, **kwargs):
+        timeouts.append(connect_timeout)
+        raise psycopg.OperationalError("database unreachable")
+
+    monkeypatch.setattr(postgres.psycopg, "connect", fake_connect)
+    return timeouts
+
+
+def test_a_rate_limit_hit_gives_up_connecting_after_two_seconds(recorded_connect_timeouts):
+    import psycopg
+
+    from app.infrastructure.postgres import PostgresTicketRepository
+
+    limiter = PostgresRateLimiter("postgresql://u:p@db/x", limit=1, window_seconds=60)
+    with pytest.raises(psycopg.OperationalError):
+        limiter.hit("ip")  # the route fails open on this error
+    with pytest.raises(psycopg.OperationalError):
+        limiter.create_schema()
+    with pytest.raises(psycopg.OperationalError):
+        PostgresTicketRepository("postgresql://u:p@db/x").list()
+
+    # Every chat request waits on the limiter, so a database outage costs at most 2 s
+    # (psycopg's floor); migrations and tickets keep the longer timeout that wakes Neon.
+    assert recorded_connect_timeouts == [2, 5, 5]
