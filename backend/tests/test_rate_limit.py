@@ -189,7 +189,7 @@ def recorded_connect_timeouts(monkeypatch):
     return timeouts
 
 
-def test_a_rate_limit_hit_gives_up_connecting_after_two_seconds(recorded_connect_timeouts):
+def test_rate_limit_hits_request_a_two_second_connect_timeout(recorded_connect_timeouts):
     import psycopg
 
     from app.infrastructure.postgres import PostgresTicketRepository
