@@ -229,7 +229,7 @@ It follows the same ports-and-adapters shape as tickets: the `RateLimiter` port 
 | Counts shared by | Every serverless instance | One process only |
 | Used for | Production | Tests, local development |
 
-Table `rate_limits` (created by `python -m app.migrate`): `key TEXT` primary key, `window_start BIGINT`, `count INTEGER`; one row per client, reused window after window.
+Table `rate_limits` (created by `python -m app.migrate`): `key TEXT` primary key, `window_start BIGINT` (indexed, so a prune never reads the whole table), `count INTEGER`; one row per client, reused window after window. About 1% of hits also delete up to 500 rows older than the previous window (in a separate transaction, skipping locked rows), so the table only holds recently active clients. Keeping the previous window is a margin for clock skew between instances, and the batch limit keeps a large backlog from slowing any single request; a failed prune is logged and never changes the decision.
 
 Design decisions:
 
