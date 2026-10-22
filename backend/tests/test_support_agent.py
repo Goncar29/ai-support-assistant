@@ -10,7 +10,7 @@ from app.application.conversation import (
 )
 from app.application.ports import ChatUseCase, ReplyFinished, ToolStarted
 from app.application.support_agent import GIVE_UP_REPLY, REFUSAL_REPLY, SupportAgent
-from app.application.support_tools import SupportTools
+from app.application.support_tools import TICKET_LIMIT_MESSAGE, SupportTools
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
 from app.infrastructure.notifications import NullNotifier
 from tests.fakes import ScriptedLLM
@@ -97,3 +97,49 @@ def test_refusal_without_text_gets_a_polite_reply():
 def test_support_agent_implements_the_chat_port():
     agent, _, _ = make_agent([AssistantMessage("hi")])
     assert isinstance(agent, ChatUseCase)
+
+
+def ticket(call_id, title="t"):
+    return call(call_id, "create_ticket", {"title": title, "description": "d"})
+
+
+def tool_result(llm, turn):
+    return llm.calls[turn][-1].results
+
+
+def test_a_request_creates_at_most_one_ticket_across_steps():
+    agent, llm, tickets = make_agent([ticket("1", "a"), ticket("2", "b"), AssistantMessage(text="Done.")])
+
+    assert agent.reply("help") == "Done."
+
+    assert [t.title for t in tickets.list()] == ["a"]
+    [rejected] = tool_result(llm, 2)
+    assert rejected.is_error
+    assert rejected.content == TICKET_LIMIT_MESSAGE
+
+
+def test_a_second_ticket_in_the_same_turn_is_rejected():
+    two = AssistantMessage(
+        text="",
+        tool_calls=(
+            ToolCall("1", "create_ticket", {"title": "a", "description": "d"}),
+            ToolCall("2", "create_ticket", {"title": "b", "description": "d"}),
+        ),
+        stop_reason=STOP_TOOL_USE,
+    )
+    agent, llm, tickets = make_agent([two, AssistantMessage(text="Done.")])
+
+    agent.reply("help")
+
+    assert len(tickets.list()) == 1
+    first, second = tool_result(llm, 1)
+    assert not first.is_error and second.is_error
+
+
+def test_the_ticket_budget_is_per_request():
+    agent, _, tickets = make_agent([ticket("1"), AssistantMessage(text="One."), ticket("2"), AssistantMessage(text="Two.")])
+
+    agent.reply("first request")
+    agent.reply("second request")
+
+    assert len(tickets.list()) == 2

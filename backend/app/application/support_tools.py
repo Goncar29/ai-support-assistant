@@ -8,6 +8,8 @@ from app.domain.ticket import DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, InvalidT
 logger = logging.getLogger(__name__)
 
 TOOL_FAILURE_MESSAGE = "Error: the tool failed due to a temporary problem; it did not complete."
+MAX_TICKETS_PER_REQUEST = 1  # one user message must not turn into a pile of tickets
+TICKET_LIMIT_MESSAGE = "Error: a ticket was already created for this request; do not create another."
 
 TOOL_SPECS: Tuple[ToolSpec, ...] = (
     ToolSpec(
@@ -50,6 +52,10 @@ class SupportTools:
     def specs(self) -> Tuple[ToolSpec, ...]:
         return TOOL_SPECS
 
+    def start_run(self) -> "ToolRun":
+        """Tools for one user request, with that request's own budgets."""
+        return ToolRun(self)
+
     def execute(self, call: ToolCall) -> ToolResult:
         handler = self._handlers.get(call.name)
         if handler is None:
@@ -74,3 +80,19 @@ class SupportTools:
         except Exception as exc:  # notification is best-effort; the ticket already exists
             logger.warning("ticket notification failed: %s", exc)
         return "Ticket %s created." % ticket.id
+
+
+class ToolRun:
+    """Executes the tool calls of one user request and enforces its per-request budgets."""
+
+    def __init__(self, tools: SupportTools):
+        self._tools = tools
+        self._tickets_created = 0
+
+    def execute(self, call: ToolCall) -> ToolResult:
+        if call.name == "create_ticket" and self._tickets_created >= MAX_TICKETS_PER_REQUEST:
+            return ToolResult(call.id, TICKET_LIMIT_MESSAGE, is_error=True)
+        result = self._tools.execute(call)
+        if call.name == "create_ticket" and not result.is_error:  # a failed attempt does not spend the budget
+            self._tickets_created += 1
+        return result
