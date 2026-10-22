@@ -17,10 +17,12 @@ export interface SpeechRecognitionLike {
 }
 type RecognitionConstructor = new () => SpeechRecognitionLike;
 
-export type SpeechError = "mic_denied" | "failed";
+export type SpeechError = "mic_denied" | "unavailable" | "failed";
 
 const SPEECH_LANG: Record<Locale, string> = { en: "en-US", es: "es-ES" };
 const DENIED_ERRORS = new Set(["not-allowed", "service-not-allowed"]);
+// The browser has the API but no speech service behind it (e.g. Brave, plain Chromium).
+const UNAVAILABLE_ERRORS = new Set(["network"]);
 // Nothing was said, or we stopped it ourselves: not worth a notice.
 const SILENT_ERRORS = new Set(["no-speech", "aborted"]);
 
@@ -30,6 +32,11 @@ function recognitionConstructor(): RecognitionConstructor | undefined {
     webkitSpeechRecognition?: RecognitionConstructor;
   };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
+}
+
+/** Brave exposes SpeechRecognition (inherited from Chrome) but disables the service that transcribes. */
+function speechServiceAvailable(): boolean {
+  return recognitionConstructor() !== undefined && !("brave" in navigator);
 }
 
 /** Loudness of 8-bit time-domain samples (128 is silence) as 0..1, boosted so normal speech fills the range. */
@@ -46,7 +53,7 @@ type Session = { recognition: SpeechRecognitionLike; stream?: MediaStream; audio
 
 /** Dictation through the browser's speech service, plus a microphone level for the orb and the mic bars. */
 export function useSpeechInput(locale: Locale, onTranscript: (text: string) => void) {
-  const [supported] = useState(() => recognitionConstructor() !== undefined);
+  const [supported, setSupported] = useState(speechServiceAvailable);
   const [listening, setListening] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<SpeechError | null>(null);
@@ -86,7 +93,10 @@ export function useSpeechInput(locale: Locale, onTranscript: (text: string) => v
       onTranscriptRef.current(Array.from(event.results, (result) => result[0].transcript).join(""));
     recognition.onerror = (event) => {
       if (DENIED_ERRORS.has(event.error)) setError("mic_denied");
-      else if (!SILENT_ERRORS.has(event.error)) setError("failed");
+      else if (UNAVAILABLE_ERRORS.has(event.error)) {
+        setError("unavailable");
+        setSupported(false); // retrying cannot work, so stop offering the mic
+      } else if (!SILENT_ERRORS.has(event.error)) setError("failed");
     };
     recognition.onend = end;
 
