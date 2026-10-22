@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useChat } from "./hooks/useChat";
+import { MESSAGES, chatErrorText, toolLabel } from "./i18n/messages";
 import "./App.css";
 
 export default function App() {
@@ -27,9 +28,9 @@ export default function App() {
               {m.text}
             </li>
           ))}
-        {(activity || waitingForFirstToken) && <li className="assistant status">{activity ?? "Thinking…"}</li>}
+        {(activity || waitingForFirstToken) && <li className="assistant status">{activity ? toolLabel(MESSAGES.en, activity) : MESSAGES.en.thinking}</li>}
       </ul>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{chatErrorText(MESSAGES.en, error)}</p>}
       <form onSubmit={onSubmit}>
         <input
           value={input}

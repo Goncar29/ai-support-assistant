@@ -1,9 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { streamChat, type ChatStreamEvent } from "../api/chatStream";
+import { ChatRequestError, streamChat, type ChatStreamEvent } from "../api/chatStream";
 import { useChat } from "./useChat";
 
-vi.mock("../api/chatStream", () => ({ streamChat: vi.fn() }));
+vi.mock("../api/chatStream", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/chatStream")>()),
+  streamChat: vi.fn(),
+}));
 const streamChatMock = vi.mocked(streamChat);
 
 function replyWith(...events: ChatStreamEvent[]) {
@@ -46,7 +49,7 @@ describe("useChat", () => {
       sending = result.current.send("refund?");
     });
     act(() => emit({ type: "tool", name: "search_faq" }));
-    expect(result.current.activity).toBe("Searching the FAQ…");
+    expect(result.current.activity).toBe("search_faq");
     expect(result.current.streaming).toBe(true);
 
     act(() => emit({ type: "delta", text: "Refunds" }));
@@ -60,13 +63,13 @@ describe("useChat", () => {
   });
 
   it("drops the empty reply bubble and reports a failed request", async () => {
-    streamChatMock.mockRejectedValue(new Error("Request failed (500)"));
+    streamChatMock.mockRejectedValue(new ChatRequestError({ kind: "request_failed", status: 500 }));
     const { result } = renderHook(() => useChat());
 
     await act(() => result.current.send("hi"));
 
     expect(texts(result.current.messages)).toEqual([["user", "hi"]]);
-    expect(result.current.error).toBe("Request failed (500)");
+    expect(result.current.error).toEqual({ kind: "request_failed", status: 500 });
   });
 
   it("reports a stream that ends without a final event", async () => {
@@ -79,7 +82,7 @@ describe("useChat", () => {
       ["user", "hi"],
       ["assistant", "partial"],
     ]);
-    expect(result.current.error).toBe("The connection closed before the reply finished.");
+    expect(result.current.error).toEqual({ kind: "incomplete" });
   });
 
   it("ignores unknown event types", async () => {
@@ -102,6 +105,15 @@ describe("useChat", () => {
       ["user", "hi"],
       ["assistant", "partial"],
     ]);
-    expect(result.current.error).toBe("Something went wrong. Please try again.");
+    expect(result.current.error).toEqual({ kind: "server" });
+  });
+
+  it("reports an unexpected failure without leaking its message", async () => {
+    streamChatMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("hi"));
+
+    expect(result.current.error).toEqual({ kind: "unexpected" });
   });
 });
