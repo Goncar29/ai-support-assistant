@@ -22,8 +22,9 @@ _STOP_REASONS = {"tool_use": STOP_TOOL_USE, "max_tokens": STOP_MAX_TOKENS, "refu
 class AnthropicProvider:
     """LLMProvider adapter for the Anthropic Messages API (streaming)."""
 
-    # Thinking counts toward max_tokens, so leave room beyond the visible answer.
-    def __init__(self, client: Any, model: str, effort: str = "low", max_tokens: int = 16000):
+    # Thinking counts toward max_tokens, so leave room beyond the visible answer. The cap is
+    # also the cost ceiling of each agent step: a support reply needs far less than 4000.
+    def __init__(self, client: Any, model: str, effort: str = "low", max_tokens: int = 4000):
         self._client = client
         self._model = model
         self._effort = effort

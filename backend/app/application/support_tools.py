@@ -3,6 +3,7 @@ from typing import Callable, Dict, Tuple
 
 from app.application.conversation import ToolCall, ToolResult, ToolSpec
 from app.application.ports import FaqRepository, TicketNotifier, TicketRepository
+from app.domain.ticket import DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, InvalidTicket, validate_ticket_fields
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,10 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
         description="Create a support ticket when the FAQ has no answer.",
         parameters={
             "type": "object",
-            "properties": {"title": {"type": "string"}, "description": {"type": "string"}},
+            "properties": {
+                "title": {"type": "string", "maxLength": TITLE_MAX_LENGTH},
+                "description": {"type": "string", "maxLength": DESCRIPTION_MAX_LENGTH},
+            },
             "required": ["title", "description"],
         },
     ),
@@ -52,7 +56,7 @@ class SupportTools:
             return ToolResult(call.id, "Error: unknown tool '%s'." % call.name, is_error=True)
         try:
             return ToolResult(call.id, handler(**call.arguments))
-        except TypeError as exc:
+        except (TypeError, InvalidTicket) as exc:
             return ToolResult(call.id, "Error: invalid arguments (%s)." % exc, is_error=True)
         except Exception:  # an adapter failed (e.g. the database is down): let the model tell the user
             logger.exception("tool %s failed", call.name)
@@ -63,6 +67,7 @@ class SupportTools:
         return "\n".join(hits) if hits else "No FAQ entry found."
 
     def _create_ticket(self, title: str, description: str) -> str:
+        validate_ticket_fields(title, description)  # the schema limits are advisory to the model
         ticket = self._tickets.create(title, description)
         try:
             self._notifier.ticket_created(ticket)
