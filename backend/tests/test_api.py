@@ -9,7 +9,7 @@ from app.application.ports import ReplyFinished, ToolStarted
 from app.config import Settings
 from app.main import build_notifier, build_ticket_repository, create_app
 from app.infrastructure.in_memory import InMemoryTicketRepository
-from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY
+from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY_ES
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 from app.infrastructure.postgres import PostgresTicketRepository
 
@@ -46,7 +46,7 @@ def test_chat_stream_sends_deltas_then_done():
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(res.text)
-    reply = "[demo mode] " + NO_FAQ_MATCH_REPLY
+    reply = "[modo demo] " + NO_FAQ_MATCH_REPLY_ES  # "hola" is answered in Spanish
     assert events[0] == ("tool", {"name": "search_faq"})
     deltas = [data["text"] for name, data in events if name == "delta"]
     assert len(deltas) > 1 and "".join(deltas) == reply

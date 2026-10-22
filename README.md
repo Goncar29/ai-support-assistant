@@ -4,7 +4,7 @@ A customer-support chat powered by Claude. The agent searches an FAQ, answers in
 
 **Live demo:** https://ai-support-assistant-sigma.vercel.app (API: https://ai-support-assistant-api.vercel.app/health)
 
-> The live demo currently runs in **demo mode**: no Anthropic API key is configured, so a scripted model stands in for Claude. It still drives the real agent loop: it searches the FAQ (try refunds, shipping or passwords) and opens a real ticket in Postgres when you ask for one ("open a ticket", "talk to a human"). Streaming, tools, storage, rate limiting and the deploy are all real; only the reasoning is fixed.
+> The live demo currently runs in **demo mode**: no Anthropic API key is configured, so a scripted model stands in for Claude. It still drives the real agent loop: it searches the FAQ in English or Spanish (try refunds, shipping or passwords, or "¿Cuánto tarda el envío?") and opens a real ticket in Postgres when you ask for one ("open a ticket", "talk to a human"). Streaming, tools, storage, rate limiting and the deploy are all real; only the reasoning is fixed.
 
 How it works (hexagonal layers, request flow, streaming, persistence): see [ARCHITECTURE.md](ARCHITECTURE.md).
 

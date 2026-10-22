@@ -4,7 +4,7 @@ from app.application.support_agent import SupportAgent
 from app.application.support_tools import SupportTools
 from app.domain.ticket import DESCRIPTION_MAX_LENGTH, Ticket
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
-from app.infrastructure.llm.demo_provider import DEMO_PREFIX, DemoProvider
+from app.infrastructure.llm.demo_provider import DEMO_PREFIX, DEMO_PREFIX_ES, DemoProvider
 from tests.fakes import FailingTicketRepository, RecordingNotifier
 
 
@@ -63,3 +63,38 @@ def test_a_failed_ticket_is_reported_honestly():
     tools_used, reply, _ = run_demo("open a ticket please", tickets=FailingTicketRepository())
     assert tools_used == ["search_faq", "create_ticket"]
     assert reply == DEMO_PREFIX + "Sorry, I could not open the ticket right now. Please try again later."
+
+
+# --- Spanish ------------------------------------------------------------------
+
+
+def test_spanish_faq_question_is_answered_in_spanish():
+    tools_used, reply, tickets = run_demo("¿Cuánto tarda el envío?")
+    assert tools_used == ["search_faq"]
+    assert reply == DEMO_PREFIX_ES + "El envío estándar tarda de 3 a 7 días hábiles."
+    assert tickets.list() == []
+
+
+def test_faq_search_ignores_accents():
+    _, reply, _ = run_demo("como cambio mi contrasena")
+    assert reply == DEMO_PREFIX_ES + "Usa 'Olvidé mi contraseña' en la página de inicio de sesión para restablecerla."
+
+
+def test_unknown_spanish_question_suggests_topics_in_spanish():
+    tools_used, reply, tickets = run_demo("Mi pedido llegó roto")
+    assert tools_used == ["search_faq"]
+    assert reply.startswith(DEMO_PREFIX_ES)
+    assert "reembolsos, envíos o contraseñas" in reply
+    assert tickets.list() == []
+
+
+def test_spanish_ticket_request_is_confirmed_in_spanish():
+    tools_used, reply, tickets = run_demo("Quiero hablar con un humano")
+    assert tools_used == ["search_faq", "create_ticket"]
+    assert reply == DEMO_PREFIX_ES + "Abrí el ticket T-0001. Nuestro equipo te va a responder pronto."
+    assert len(tickets.list()) == 1
+
+
+def test_failed_spanish_ticket_is_reported_in_spanish():
+    _, reply, _ = run_demo("Necesito un ticket por favor", tickets=FailingTicketRepository())
+    assert reply == DEMO_PREFIX_ES + "Perdón, no pude abrir el ticket ahora. Inténtalo de nuevo más tarde."
