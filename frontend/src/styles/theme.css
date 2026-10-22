@@ -1,0 +1,85 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b14;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-strong: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #e5e7eb;
+  --text-muted: #9ca3af;
+  --violet: #7c3aed;
+  --violet-soft: #a78bfa;
+  --cyan: #06b6d4;
+  --cyan-soft: #22d3ee;
+  --pink: #ec4899;
+  --green: #10b981;
+  --green-soft: #6ee7b7;
+  --danger: #fca5a5;
+  --radius-bubble: 18px;
+  --radius-pill: 999px;
+  --gutter: 16px;
+  --column: 760px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--violet-soft);
+  outline-offset: 2px;
+}
+
+/* Two fixed aurora glows behind everything. */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(60px);
+}
+
+.aurora::before {
+  top: -25vmax;
+  left: -20vmax;
+  background: radial-gradient(circle, var(--violet), transparent 65%);
+  opacity: 0.35;
+}
+
+.aurora::after {
+  right: -20vmax;
+  bottom: -30vmax;
+  background: radial-gradient(circle, var(--cyan), transparent 65%);
+  opacity: 0.25;
+}
