@@ -23,11 +23,27 @@ export function parseSseFrames(buffer: string): { events: ChatStreamEvent[]; res
   return { events, rest };
 }
 
-function rateLimitMessage(retryAfter: string | null): string {
-  const seconds = Number(retryAfter);
-  const valid = retryAfter && Number.isInteger(seconds) && seconds > 0;
-  const wait = valid ? `${seconds} ${seconds === 1 ? "second" : "seconds"}` : "a moment";
-  return `Too many messages. Please wait ${wait} and try again.`;
+/** Why a chat request failed, as data, so the UI can word it in the visitor's language. */
+export type ChatError =
+  | { kind: "rate_limit"; retryAfterSeconds: number | null }
+  | { kind: "request_failed"; status: number }
+  | { kind: "incomplete" }
+  | { kind: "server" }
+  | { kind: "unexpected" };
+
+export class ChatRequestError extends Error {
+  readonly detail: ChatError;
+
+  constructor(detail: ChatError) {
+    super(`Chat request failed: ${detail.kind}`);
+    this.name = "ChatRequestError";
+    this.detail = detail;
+  }
+}
+
+function retryAfterSeconds(header: string | null): number | null {
+  const seconds = Number(header);
+  return header && Number.isInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
 /** POSTs the message and invokes `onEvent` for every server-sent event as it arrives. */
@@ -42,8 +58,10 @@ export async function streamChat(
     body: JSON.stringify({ message }),
     signal,
   });
-  if (res.status === 429) throw new Error(rateLimitMessage(res.headers.get("Retry-After")));
-  if (!res.ok || !res.body) throw new Error(`Request failed (${res.status})`);
+  if (res.status === 429) {
+    throw new ChatRequestError({ kind: "rate_limit", retryAfterSeconds: retryAfterSeconds(res.headers.get("Retry-After")) });
+  }
+  if (!res.ok || !res.body) throw new ChatRequestError({ kind: "request_failed", status: res.status });
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
