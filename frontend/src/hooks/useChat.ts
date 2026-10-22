@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamChat, type ChatStreamEvent } from "../api/chatStream";
+import { ChatRequestError, streamChat, type ChatError, type ChatStreamEvent } from "../api/chatStream";
 
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
-
-const TOOL_LABELS: Record<string, string> = {
-  search_faq: "Searching the FAQ…",
-  create_ticket: "Creating a ticket…",
-};
-const INCOMPLETE_STREAM_ERROR = "The connection closed before the reply finished.";
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activity, setActivity] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChatError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -41,7 +35,7 @@ export function useChat() {
             updateReply((current) => current + event.text);
             break;
           case "tool":
-            setActivity(TOOL_LABELS[event.name] ?? "Working…");
+            setActivity(event.name); // the UI words it in the visitor's language
             break;
           case "done":
             finished = true;
@@ -49,7 +43,7 @@ export function useChat() {
             break;
           case "error":
             finished = true;
-            setError(event.message);
+            setError({ kind: "server" }); // the server's message is English-only; the UI has its own wording
             break;
           // Unknown event types are ignored so the server can add new ones safely.
         }
@@ -59,9 +53,9 @@ export function useChat() {
       abortRef.current = controller;
       try {
         await streamChat(text, onEvent, controller.signal);
-        if (!finished) setError(INCOMPLETE_STREAM_ERROR);
+        if (!finished) setError({ kind: "incomplete" });
       } catch (err) {
-        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Unexpected error");
+        if (!controller.signal.aborted) setError(err instanceof ChatRequestError ? err.detail : { kind: "unexpected" });
       } finally {
         // Drop the reply bubble if nothing arrived (e.g. the request failed).
         setMessages((m) => m.filter((msg) => msg.id !== replyId || msg.text));
