@@ -23,6 +23,7 @@ from app.application.conversation import (
 from app.domain.ticket import DESCRIPTION_MAX_LENGTH
 
 DEMO_PREFIX = "[demo mode] "
+DEMO_PREFIX_ES = "[modo demo] "
 TITLE_LENGTH = 60
 # Tickets are stored, so only an explicit request opens one; otherwise every
 # unmatched message would become a ticket.
@@ -33,6 +34,18 @@ NO_FAQ_MATCH_REPLY = (
 )
 TICKET_CREATED_REPLY = "I opened ticket %s for you. Our team will get back to you soon."
 TICKET_FAILED_REPLY = "Sorry, I could not open the ticket right now. Please try again later."
+NO_FAQ_MATCH_REPLY_ES = (
+    "No encontré eso en las preguntas frecuentes. En modo demo puedo responder sobre "
+    "reembolsos, envíos o contraseñas. Si necesitas ayuda con otra cosa, pídeme que abra un ticket."
+)
+TICKET_CREATED_REPLY_ES = "Abrí el ticket %s. Nuestro equipo te va a responder pronto."
+TICKET_FAILED_REPLY_ES = "Perdón, no pude abrir el ticket ahora. Inténtalo de nuevo más tarde."
+# A cheap language guess for the fixed replies: Spanish punctuation or letters, or
+# common Spanish words that are not English words too.
+_SPANISH = re.compile(
+    r"[¿¡ñáéíóú]|\b(el|la|los|las|de|del|que|mi|mis|un|una|por|para|con|es|hola|como|quiero|necesito|pedido|ayuda|hablar)\b",
+    re.IGNORECASE,
+)
 NO_FAQ_ENTRY = "No FAQ entry found."  # what search_faq returns on a miss
 
 _SEARCH_ID, _TICKET_ID = "demo-search", "demo-ticket"
@@ -43,6 +56,7 @@ class DemoProvider:
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         question = next(m for m in reversed(messages) if isinstance(m, UserMessage)).text
         result = _last_result(messages)
+        spanish = bool(_SPANISH.search(question))
 
         if result is None:  # first turn: always look in the FAQ first
             yield from _call(ToolCall(_SEARCH_ID, "search_faq", {"query": question}))
@@ -53,12 +67,16 @@ class DemoProvider:
                     "description": question[:DESCRIPTION_MAX_LENGTH],
                 }))
             elif result.is_error or result.content == NO_FAQ_ENTRY:
-                yield from _answer(NO_FAQ_MATCH_REPLY)
+                yield from _answer(NO_FAQ_MATCH_REPLY_ES if spanish else NO_FAQ_MATCH_REPLY, spanish)
             else:
-                yield from _answer(result.content)
+                yield from _answer(result.content, spanish)
         else:
             created = None if result.is_error else _TICKET_NUMBER.search(result.content)
-            yield from _answer(TICKET_CREATED_REPLY % created.group(1) if created else TICKET_FAILED_REPLY)
+            if created:
+                template = TICKET_CREATED_REPLY_ES if spanish else TICKET_CREATED_REPLY
+                yield from _answer(template % created.group(1), spanish)
+            else:
+                yield from _answer(TICKET_FAILED_REPLY_ES if spanish else TICKET_FAILED_REPLY, spanish)
 
 
 def _last_result(messages: Sequence[Message]) -> Optional[ToolResult]:
@@ -75,8 +93,8 @@ def _call(call: ToolCall) -> Iterator[LLMEvent]:
     yield TurnComplete(AssistantMessage(text="", tool_calls=(call,), stop_reason=STOP_TOOL_USE))
 
 
-def _answer(text: str) -> Iterator[LLMEvent]:
-    reply = DEMO_PREFIX + text
+def _answer(text: str, spanish: bool = False) -> Iterator[LLMEvent]:
+    reply = (DEMO_PREFIX_ES if spanish else DEMO_PREFIX) + text
     # Word by word, so the client sees the same streaming as with a real model.
     for chunk in re.findall(r"\S+\s*", reply):
         yield TextDelta(chunk)

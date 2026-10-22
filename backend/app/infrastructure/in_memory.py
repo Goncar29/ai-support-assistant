@@ -1,6 +1,7 @@
 """In-memory adapters: local development and tests. State is lost on restart."""
 import threading
 import time
+import unicodedata
 from typing import Callable, Dict, List, Optional
 
 from app.domain.rate_limit import RateLimitDecision, current_window, decide
@@ -10,7 +11,17 @@ DEFAULT_FAQ: Dict[str, str] = {
     "refund": "Refunds are processed within 5 business days after approval.",
     "shipping": "Standard shipping takes 3-7 business days.",
     "password": "Use 'Forgot password' on the login page to reset it.",
+    # Spanish entries; topics are written without accents because search ignores them.
+    "reembolso": "Los reembolsos se procesan dentro de los 5 días hábiles posteriores a su aprobación.",
+    "envio": "El envío estándar tarda de 3 a 7 días hábiles.",
+    "contrasena": "Usa 'Olvidé mi contraseña' en la página de inicio de sesión para restablecerla.",
 }
+
+
+def _fold(text: str) -> str:
+    """Lowercase and strip accents, so "Envío" and "envio" match the same topic."""
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
 class InMemoryFaqRepository:
@@ -18,8 +29,8 @@ class InMemoryFaqRepository:
         self._entries = dict(entries)
 
     def search(self, query: str) -> List[str]:
-        q = query.lower()
-        return [answer for topic, answer in self._entries.items() if topic in q]
+        q = _fold(query)
+        return [answer for topic, answer in self._entries.items() if _fold(topic) in q]
 
 
 class InMemoryTicketRepository:
