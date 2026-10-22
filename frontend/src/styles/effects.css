@@ -1,0 +1,288 @@
+/* Spotlight: a soft halo that follows the cursor (position from usePointerGlow). */
+.spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    420px circle at var(--x, -1000px) var(--y, -1000px),
+    rgba(124, 58, 237, 0.18),
+    rgba(6, 182, 212, 0.07) 40%,
+    transparent 70%
+  );
+}
+
+/* Border glow: the border lights up where the cursor is. Only the 1px ring is painted. */
+.glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    140px circle at var(--ex, -1000px) var(--ey, -1000px),
+    var(--violet-soft),
+    var(--cyan-soft) 40%,
+    transparent 70%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Orb: three blurred blobs moving inside a sphere, each on its own timing. */
+.orb {
+  --d1: 6s;
+  --d2: 7.5s;
+  --d3: 5s;
+  --orb-color: rgba(124, 58, 237, 0.55);
+  --orb-glow: 40px;
+  --orb-blur: 14px;
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 50%;
+  background: #140b2e;
+  box-shadow: 0 0 calc(var(--orb-glow) + var(--level, 0) * 60px) var(--orb-color), inset 0 0 25px rgba(0, 0, 0, 0.55);
+  scale: calc(1 + var(--level, 0) * 0.25);
+  transition: box-shadow 0.5s, scale 0.12s;
+}
+
+.orb--sm {
+  --orb-glow: 14px;
+  --orb-blur: 4px;
+  width: 28px;
+  height: 28px;
+}
+
+.orb--lg {
+  width: 132px;
+  height: 132px;
+}
+
+.orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.35), transparent 35%);
+}
+
+.orb i {
+  position: absolute;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  filter: blur(var(--orb-blur));
+  mix-blend-mode: screen;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  transition: background 0.5s;
+}
+
+.orb i:nth-child(1) {
+  top: -10%;
+  left: -10%;
+  background: var(--violet);
+  animation-name: orb-m1;
+  animation-duration: var(--d1);
+}
+
+.orb i:nth-child(2) {
+  right: -10%;
+  bottom: -12%;
+  background: var(--cyan);
+  animation-name: orb-m2;
+  animation-duration: var(--d2);
+}
+
+.orb i:nth-child(3) {
+  top: 25%;
+  left: 30%;
+  width: 50%;
+  height: 50%;
+  background: var(--pink);
+  animation-name: orb-m3;
+  animation-duration: var(--d3);
+}
+
+@keyframes orb-m1 {
+  50% {
+    translate: 45% 35%;
+    scale: 1.2;
+  }
+  100% {
+    translate: 10% 60%;
+    scale: 0.9;
+  }
+}
+
+@keyframes orb-m2 {
+  50% {
+    translate: -50% -25%;
+    scale: 0.85;
+  }
+  100% {
+    translate: -15% -55%;
+    scale: 1.15;
+  }
+}
+
+@keyframes orb-m3 {
+  50% {
+    translate: -45% 35%;
+    scale: 1.3;
+  }
+  100% {
+    translate: 35% -35%;
+    scale: 0.8;
+  }
+}
+
+.orb--thinking {
+  --d1: 1.8s;
+  --d2: 2.2s;
+  --d3: 1.5s;
+  --orb-color: rgba(6, 182, 212, 0.7);
+}
+
+.orb--speaking {
+  --d1: 3s;
+  --d2: 3.6s;
+  --d3: 2.4s;
+  --orb-color: rgba(236, 72, 153, 0.65);
+  animation: orb-talk 0.45s ease-in-out infinite;
+}
+
+.orb--listening {
+  --d1: 2.6s;
+  --d2: 3.1s;
+  --d3: 2.2s;
+  --orb-color: rgba(52, 211, 153, 0.7);
+}
+
+.orb--listening i:nth-child(1) {
+  background: var(--green);
+}
+
+.orb--listening i:nth-child(2) {
+  background: var(--cyan-soft);
+}
+
+.orb--listening i:nth-child(3) {
+  background: var(--violet-soft);
+}
+
+@keyframes orb-talk {
+  50% {
+    scale: 1.07;
+  }
+}
+
+/* Mic: a line icon at rest that morphs into level bars with green ripples while listening. */
+.mic--on {
+  border-color: var(--green-soft);
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.mic__icon,
+.mic__bars {
+  transition: opacity 0.25s, scale 0.25s;
+}
+
+.mic__bars {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  opacity: 0;
+  scale: 0.6;
+}
+
+.mic__bars b {
+  width: 3px;
+  height: calc(4px + var(--bar, 0) * 16px);
+  border-radius: 2px;
+  background: var(--green-soft);
+  transition: height 0.08s;
+  animation: bar-wobble 0.6s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i, 0) * -0.13s);
+}
+
+.mic--on .mic__icon {
+  opacity: 0;
+  scale: 0.6;
+}
+
+.mic--on .mic__bars {
+  opacity: 1;
+  scale: 1;
+}
+
+.mic__ripple {
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--green-soft);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mic--on .mic__ripple {
+  animation: ripple 1.6s ease-out infinite;
+}
+
+.mic--on .mic__ripple + .mic__ripple {
+  animation-delay: 0.8s;
+}
+
+@keyframes ripple {
+  from {
+    opacity: 0.8;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.2;
+  }
+}
+
+@keyframes bar-wobble {
+  from {
+    scale: 1 0.75;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+/* Touch screens have no cursor to follow. */
+@media (hover: none) {
+  .spotlight,
+  .glow::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb i,
+  .mic__bars b,
+  .mic__ripple,
+  .bubble,
+  .activity__dot {
+    animation: none !important;
+  }
+
+  .orb {
+    scale: 1;
+  }
+
+  .spotlight {
+    display: none;
+  }
+}
