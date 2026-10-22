@@ -33,6 +33,7 @@ class SupportAgent:
 
     def run(self, message: str) -> Iterator[AgentEvent]:
         messages: List[Message] = [UserMessage(message)]
+        tools = self._tools.start_run()
         for _ in range(self._max_steps):
             turn: Optional[AssistantMessage] = None
             for event in self._llm.stream(SYSTEM_PROMPT, messages, self._tools.specs):
@@ -51,7 +52,7 @@ class SupportAgent:
             results = []
             for call in turn.tool_calls:
                 yield ToolStarted(call.name)
-                results.append(self._tools.execute(call))
+                results.append(tools.execute(call))
             messages.append(ToolResultsMessage(tuple(results)))
         yield ReplyFinished(GIVE_UP_REPLY)
 
