@@ -5,7 +5,8 @@ so the whole agent loop, the tools, streaming and storage run for real at no cos
 Only the "reasoning" is a fixed script.
 """
 import re
-from typing import Iterator, Optional, Sequence
+import time
+from typing import Callable, Iterator, Optional, Sequence
 
 from app.application.conversation import (
     STOP_TOOL_USE,
@@ -23,6 +24,9 @@ from app.application.conversation import (
 from app.domain.ticket import DESCRIPTION_MAX_LENGTH
 
 DEMO_PREFIX = "[demo mode] "
+# Pause between streamed words, so the reply arrives like a model streaming tokens
+# (and the UI shows its "speaking" state) instead of all at once.
+WORD_DELAY_SECONDS = 0.04
 DEMO_PREFIX_ES = "[modo demo] "
 TITLE_LENGTH = 60
 # Tickets are stored, so only an explicit request opens one; otherwise every
@@ -53,6 +57,10 @@ _TICKET_NUMBER = re.compile(r"Ticket (\S+) created\.")
 
 
 class DemoProvider:
+    def __init__(self, word_delay: Optional[float] = None, sleep: Callable[[float], None] = time.sleep):
+        self._word_delay = word_delay
+        self._sleep = sleep
+
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         question = next(m for m in reversed(messages) if isinstance(m, UserMessage)).text
         result = _last_result(messages)
@@ -67,16 +75,27 @@ class DemoProvider:
                     "description": question[:DESCRIPTION_MAX_LENGTH],
                 }))
             elif result.is_error or result.content == NO_FAQ_ENTRY:
-                yield from _answer(NO_FAQ_MATCH_REPLY_ES if spanish else NO_FAQ_MATCH_REPLY, spanish)
+                yield from self._answer(NO_FAQ_MATCH_REPLY_ES if spanish else NO_FAQ_MATCH_REPLY, spanish)
             else:
-                yield from _answer(result.content, spanish)
+                yield from self._answer(result.content, spanish)
         else:
             created = None if result.is_error else _TICKET_NUMBER.search(result.content)
             if created:
                 template = TICKET_CREATED_REPLY_ES if spanish else TICKET_CREATED_REPLY
-                yield from _answer(template % created.group(1), spanish)
+                yield from self._answer(template % created.group(1), spanish)
             else:
-                yield from _answer(TICKET_FAILED_REPLY_ES if spanish else TICKET_FAILED_REPLY, spanish)
+                yield from self._answer(TICKET_FAILED_REPLY_ES if spanish else TICKET_FAILED_REPLY, spanish)
+
+    def _answer(self, text: str, spanish: bool = False) -> Iterator[LLMEvent]:
+        reply = (DEMO_PREFIX_ES if spanish else DEMO_PREFIX) + text
+        # Read at call time, so tests can turn the pause off for the whole app.
+        delay = WORD_DELAY_SECONDS if self._word_delay is None else self._word_delay
+        # Word by word, so the client sees the same streaming as with a real model.
+        for i, chunk in enumerate(re.findall(r"\S+\s*", reply)):
+            if i:
+                self._sleep(delay)
+            yield TextDelta(chunk)
+        yield TurnComplete(AssistantMessage(text=reply))
 
 
 def _last_result(messages: Sequence[Message]) -> Optional[ToolResult]:
@@ -91,11 +110,3 @@ def _wants_ticket(question: str) -> bool:
 
 def _call(call: ToolCall) -> Iterator[LLMEvent]:
     yield TurnComplete(AssistantMessage(text="", tool_calls=(call,), stop_reason=STOP_TOOL_USE))
-
-
-def _answer(text: str, spanish: bool = False) -> Iterator[LLMEvent]:
-    reply = (DEMO_PREFIX_ES if spanish else DEMO_PREFIX) + text
-    # Word by word, so the client sees the same streaming as with a real model.
-    for chunk in re.findall(r"\S+\s*", reply):
-        yield TextDelta(chunk)
-    yield TurnComplete(AssistantMessage(text=reply))

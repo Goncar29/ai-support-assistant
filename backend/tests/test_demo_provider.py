@@ -98,3 +98,15 @@ def test_spanish_ticket_request_is_confirmed_in_spanish():
 def test_failed_spanish_ticket_is_reported_in_spanish():
     _, reply, _ = run_demo("Necesito un ticket por favor", tickets=FailingTicketRepository())
     assert reply == DEMO_PREFIX_ES + "Perdón, no pude abrir el ticket ahora. Inténtalo de nuevo más tarde."
+
+
+def test_replies_are_paced_word_by_word():
+    pauses = []
+    tools = SupportTools(InMemoryFaqRepository(DEFAULT_FAQ), InMemoryTicketRepository(), RecordingNotifier())
+    agent = SupportAgent(DemoProvider(word_delay=0.05, sleep=pauses.append), tools)
+
+    events = list(agent.run("How long does shipping take?"))
+
+    deltas = [e for e in events if isinstance(e, TextDelta)]
+    assert len(deltas) > 1
+    assert pauses == [0.05] * (len(deltas) - 1)  # between words, none after the last one
