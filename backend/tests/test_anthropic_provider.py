@@ -82,7 +82,8 @@ def test_translates_request_and_streams_text_then_the_complete_turn():
 def test_defaults_leave_room_for_thinking_at_low_effort():
     client = FakeClient([done()])
     run(AnthropicProvider(client, model="m"), [UserMessage("hi")])
-    assert client.calls[0]["max_tokens"] == 16000
+    # A support reply needs far less; the cap bounds the cost of each agent step.
+    assert client.calls[0]["max_tokens"] == 4000
     assert client.calls[0]["output_config"] == {"effort": "low"}
 
 

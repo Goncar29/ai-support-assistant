@@ -15,6 +15,7 @@ router = APIRouter()
 
 STREAM_ERROR_MESSAGE = "Something went wrong. Please try again."
 RATE_LIMIT_MESSAGE = "Too many requests. Please try again later."
+GLOBAL_RATE_LIMIT_KEY = "chat:global"
 
 
 class ChatRequest(BaseModel):
@@ -35,10 +36,18 @@ def client_ip(request: Request) -> str:
 
 
 def enforce_rate_limit(request: Request) -> None:
-    """Every chat request costs model tokens, so each client gets a budget per time window."""
-    limiter: RateLimiter = request.app.state.rate_limiter
+    """Every chat request costs model tokens, so each client gets a budget per time window,
+    and all clients together share a global one that caps the total spend.
+
+    The client budget is checked first, so requests it denies never spend the global one.
+    """
+    _enforce(request.app.state.rate_limiter, "chat:%s" % client_key(client_ip(request)))
+    _enforce(request.app.state.global_rate_limiter, GLOBAL_RATE_LIMIT_KEY)
+
+
+def _enforce(limiter: RateLimiter, key: str) -> None:
     try:
-        decision = limiter.hit("chat:%s" % client_key(client_ip(request)))
+        decision = limiter.hit(key)
     except Exception:  # fail open: a limiter outage must not take the chat down with it
         logger.exception("rate limiter failed; allowing the request")
         return

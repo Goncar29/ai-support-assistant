@@ -9,6 +9,7 @@ EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 DEFAULT_RATE_LIMIT_REQUESTS = 10  # chat requests per client...
 DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60  # ...per minute
+DEFAULT_GLOBAL_RATE_LIMIT_REQUESTS = 100  # all clients together, per window: caps total model spend
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class Settings:
     database_url: Optional[str] = None
     rate_limit_requests: int = DEFAULT_RATE_LIMIT_REQUESTS
     rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+    global_rate_limit_requests: int = DEFAULT_GLOBAL_RATE_LIMIT_REQUESTS
     # Only a proxy that overwrites X-Forwarded-For (Vercel does) makes it safe to read the client IP from it.
     trust_forwarded_for: bool = False
 
@@ -33,6 +35,7 @@ class Settings:
         for name, value in (
             ("RATE_LIMIT_REQUESTS", self.rate_limit_requests),
             ("RATE_LIMIT_WINDOW_SECONDS", self.rate_limit_window_seconds),
+            ("GLOBAL_RATE_LIMIT_REQUESTS", self.global_rate_limit_requests),
         ):
             if value < 1:
                 raise ValueError("%s must be a positive integer, got %r" % (name, value))
@@ -49,6 +52,7 @@ class Settings:
             database_url=env.get("DATABASE_URL") or None,
             rate_limit_requests=_int(env, "RATE_LIMIT_REQUESTS", DEFAULT_RATE_LIMIT_REQUESTS),
             rate_limit_window_seconds=_int(env, "RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS),
+            global_rate_limit_requests=_int(env, "GLOBAL_RATE_LIMIT_REQUESTS", DEFAULT_GLOBAL_RATE_LIMIT_REQUESTS),
             trust_forwarded_for=env.get("VERCEL") == "1",  # Vercel sets VERCEL=1 in every deployment
         )
 

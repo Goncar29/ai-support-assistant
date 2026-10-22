@@ -1,6 +1,8 @@
 from app.application.conversation import ToolCall, ToolResult
-from app.application.support_tools import TOOL_FAILURE_MESSAGE, SupportTools
-from app.domain.ticket import Ticket
+import pytest
+
+from app.application.support_tools import TOOL_FAILURE_MESSAGE, TOOL_SPECS, SupportTools
+from app.domain.ticket import DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, Ticket
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
 from tests.fakes import FailingTicketRepository, RecordingNotifier
 
@@ -52,3 +54,32 @@ def test_storage_failure_becomes_a_tool_error_the_model_can_explain():
 
     assert result == ToolResult("1", TOOL_FAILURE_MESSAGE, is_error=True)
     assert notifier.sent == []
+
+
+def test_create_ticket_schema_caps_field_lengths():
+    spec = next(s for s in TOOL_SPECS if s.name == "create_ticket")
+    properties = spec.parameters["properties"]
+    assert properties["title"]["maxLength"] == TITLE_MAX_LENGTH == 120
+    assert properties["description"]["maxLength"] == DESCRIPTION_MAX_LENGTH == 2000
+
+
+@pytest.mark.parametrize("field, limit", [("title", TITLE_MAX_LENGTH), ("description", DESCRIPTION_MAX_LENGTH)])
+def test_oversized_ticket_fields_are_rejected_without_storing_or_notifying(field, limit):
+    notifier = RecordingNotifier()
+    tools, tickets = make_tools(notifier)
+    arguments = {"title": "t", "description": "d", field: "x" * (limit + 1)}
+
+    result = tools.execute(ToolCall("1", "create_ticket", arguments))
+
+    assert result.is_error
+    assert result.content == "Error: invalid arguments (%s must be at most %d characters)." % (field, limit)
+    assert tickets.list() == []
+    assert notifier.sent == []
+
+
+def test_ticket_fields_at_the_limit_are_accepted():
+    tools, tickets = make_tools()
+    title, description = "t" * TITLE_MAX_LENGTH, "d" * DESCRIPTION_MAX_LENGTH
+    result = tools.execute(ToolCall("1", "create_ticket", {"title": title, "description": description}))
+    assert not result.is_error
+    assert tickets.list() == [Ticket("T-0001", title, description)]

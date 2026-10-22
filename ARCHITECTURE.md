@@ -220,7 +220,7 @@ Design decisions:
 
 ## Rate limiting
 
-Every chat request costs model tokens, so `/chat` and `/chat/stream` share one budget per client IP: `RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS` (10 per minute by default). Over the budget the API answers `429` with a `Retry-After` header, and the frontend shows "Too many messages. Please wait N seconds and try again." An IPv6 client is keyed by its /64 network, not its full address: ISPs give each customer at least a /64, so keying by address would let one client rotate addresses for a fresh budget (IPv4 and IPv4-mapped addresses stay one key per address).
+Every chat request costs model tokens, so `/chat` and `/chat/stream` share one budget per client IP: `RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS` (10 per minute by default). All clients together also share a global budget, `GLOBAL_RATE_LIMIT_REQUESTS` per window (100 by default, key `chat:global` in the same table), so many IPs cannot multiply the spend; it is checked after the per-client budget, so requests that budget denies never spend it. Each model step is capped at 4000 output tokens, and `create_ticket` rejects titles over 120 and descriptions over 2000 characters. Over a budget the API answers `429` with a `Retry-After` header, and the frontend shows "Too many messages. Please wait N seconds and try again." An IPv6 client is keyed by its /64 network, not its full address: ISPs give each customer at least a /64, so keying by address would let one client rotate addresses for a fresh budget (IPv4 and IPv4-mapped addresses stay one key per address).
 
 It follows the same ports-and-adapters shape as tickets: the `RateLimiter` port lives in `application/ports.py`, the window math in `domain/rate_limit.py`, and `main.build_rate_limiter` picks the adapter.
 
@@ -252,6 +252,7 @@ Every setting is read in `backend/app/config.py`. Locally, put them in `backend/
 | `N8N_WEBHOOK_URL` | Ticket notification webhook | unset → no notification |
 | `CORS_ORIGINS` | Origins allowed to call the API | `http://localhost:5173` |
 | `RATE_LIMIT_REQUESTS` | Chat requests per client IP per window | `10` |
+| `GLOBAL_RATE_LIMIT_REQUESTS` | Chat requests of all clients together per window | `100` |
 | `RATE_LIMIT_WINDOW_SECONDS` | Rate-limit window length | `60` |
 
 Frontend: `VITE_API_URL` points to the backend (default `http://localhost:8000`).

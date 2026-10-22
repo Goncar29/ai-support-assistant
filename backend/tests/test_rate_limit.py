@@ -5,7 +5,7 @@ from app.config import Settings
 from app.domain.rate_limit import client_key
 from app.infrastructure.in_memory import InMemoryRateLimiter
 from app.infrastructure.postgres import PostgresRateLimiter
-from app.main import build_rate_limiter, create_app
+from app.main import build_global_rate_limiter, build_rate_limiter, create_app
 
 
 class FakeClock:
@@ -138,16 +138,48 @@ def test_a_broken_limiter_does_not_take_the_chat_down():
             raise ConnectionError("database is down")
 
     client.app.state.rate_limiter = BrokenLimiter()
+    client.app.state.global_rate_limiter = BrokenLimiter()
     assert client.post("/chat", json={"message": "hi"}).status_code == 200
     assert client.post("/chat", json={"message": "hi"}).status_code == 200
+
+
+def post_as(client, ip):
+    return client.post("/chat", json={"message": "hi"}, headers={"X-Forwarded-For": ip})
+
+
+def test_global_limit_caps_all_clients_together():
+    # Rotating IPs buys a fresh per-client budget, but every request still spends the shared one.
+    client = make_client(rate_limit_requests=10, global_rate_limit_requests=2, trust_forwarded_for=True)
+    assert post_as(client, "1.1.1.1").status_code == 200
+    assert post_as(client, "2.2.2.2").status_code == 200
+    res = post_as(client, "3.3.3.3")
+    assert res.status_code == 429
+    assert res.json() == {"detail": "Too many requests. Please try again later."}
+    assert 1 <= int(res.headers["Retry-After"]) <= 60
+
+
+def test_requests_denied_per_client_do_not_spend_the_global_budget():
+    # Otherwise one blocked client could keep hammering and lock everyone else out.
+    client = make_client(rate_limit_requests=1, global_rate_limit_requests=2, trust_forwarded_for=True)
+    assert post_as(client, "1.1.1.1").status_code == 200
+    assert post_as(client, "1.1.1.1").status_code == 429
+    assert post_as(client, "1.1.1.1").status_code == 429
+    assert post_as(client, "2.2.2.2").status_code == 200
+    assert post_as(client, "3.3.3.3").status_code == 429
 
 
 # --- Configuration and wiring ----------------------------------------------
 
 
 def test_settings_read_rate_limit_values():
-    settings = Settings.from_env({"RATE_LIMIT_REQUESTS": "5", "RATE_LIMIT_WINDOW_SECONDS": "30", "VERCEL": "1"})
+    settings = Settings.from_env({
+        "RATE_LIMIT_REQUESTS": "5",
+        "GLOBAL_RATE_LIMIT_REQUESTS": "50",
+        "RATE_LIMIT_WINDOW_SECONDS": "30",
+        "VERCEL": "1",
+    })
     assert settings.rate_limit_requests == 5
+    assert settings.global_rate_limit_requests == 50
     assert settings.rate_limit_window_seconds == 30
     assert settings.trust_forwarded_for is True
 
@@ -155,13 +187,19 @@ def test_settings_read_rate_limit_values():
 def test_settings_rate_limit_defaults():
     settings = Settings.from_env({})
     assert settings.rate_limit_requests == 10
+    assert settings.global_rate_limit_requests == 100
     assert settings.rate_limit_window_seconds == 60
     assert settings.trust_forwarded_for is False
 
 
 @pytest.mark.parametrize(
     "env",
-    [{"RATE_LIMIT_REQUESTS": "0"}, {"RATE_LIMIT_REQUESTS": "ten"}, {"RATE_LIMIT_WINDOW_SECONDS": "-1"}],
+    [
+        {"RATE_LIMIT_REQUESTS": "0"},
+        {"RATE_LIMIT_REQUESTS": "ten"},
+        {"RATE_LIMIT_WINDOW_SECONDS": "-1"},
+        {"GLOBAL_RATE_LIMIT_REQUESTS": "0"},
+    ],
 )
 def test_settings_reject_invalid_rate_limit_values(env):
     with pytest.raises(ValueError, match="RATE_LIMIT_"):
@@ -171,6 +209,14 @@ def test_settings_reject_invalid_rate_limit_values(env):
 def test_rate_limiter_uses_postgres_only_when_database_url_is_configured():
     assert isinstance(build_rate_limiter(Settings()), InMemoryRateLimiter)
     assert isinstance(build_rate_limiter(Settings(database_url="postgresql://u:p@localhost/db")), PostgresRateLimiter)
+
+
+def test_global_rate_limiter_uses_the_global_limit_and_the_same_backend():
+    limiter = build_global_rate_limiter(Settings(rate_limit_requests=5, global_rate_limit_requests=1))
+    assert limiter.hit("chat:global").allowed
+    assert not limiter.hit("chat:global").allowed
+    database = Settings(database_url="postgresql://u:p@localhost/db")
+    assert isinstance(build_global_rate_limiter(database), PostgresRateLimiter)
 
 
 @pytest.fixture

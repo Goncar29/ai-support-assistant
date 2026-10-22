@@ -55,6 +55,7 @@ Backend (all optional):
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
 | `RATE_LIMIT_REQUESTS` | Chat requests each client (IP) may make per window, across `/chat` and `/chat/stream`; counted in Postgres when `DATABASE_URL` is set, otherwise in memory per process | `10` |
+| `GLOBAL_RATE_LIMIT_REQUESTS` | Chat requests all clients together may make per window; caps total model spend even when many IPs are used. Checked after the per-client limit, so requests that limit denies do not count | `100` |
 | `RATE_LIMIT_WINDOW_SECONDS` | Length of the rate-limit window | `60` |
 
 Frontend:

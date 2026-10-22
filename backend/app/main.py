@@ -41,7 +41,16 @@ def build_ticket_repository(settings: Settings) -> TicketRepository:
 
 
 def build_rate_limiter(settings: Settings) -> RateLimiter:
-    limit, window = settings.rate_limit_requests, settings.rate_limit_window_seconds
+    return _build_limiter(settings, settings.rate_limit_requests)
+
+
+def build_global_rate_limiter(settings: Settings) -> RateLimiter:
+    # Same table and window as the per-client limiter; only the limit differs.
+    return _build_limiter(settings, settings.global_rate_limit_requests)
+
+
+def _build_limiter(settings: Settings, limit: int) -> RateLimiter:
+    window = settings.rate_limit_window_seconds
     if not settings.database_url:
         return InMemoryRateLimiter(limit, window)
     from app.infrastructure.postgres import PostgresRateLimiter
@@ -65,6 +74,7 @@ def create_app(settings: Settings) -> FastAPI:
     )
     app.state.chat = build_chat(settings)  # the API only sees the ChatUseCase port
     app.state.rate_limiter = build_rate_limiter(settings)
+    app.state.global_rate_limiter = build_global_rate_limiter(settings)
     app.state.trust_forwarded_for = settings.trust_forwarded_for
     app.include_router(router)
     return app
