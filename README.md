@@ -6,6 +6,8 @@ A customer-support chat powered by Claude. The agent searches an FAQ, answers in
 
 > The live demo currently runs in **demo mode**: no Anthropic API key is configured, so a scripted model stands in for Claude. It still drives the real agent loop: it searches the FAQ in English or Spanish (try refunds, shipping or passwords, or "¿Cuánto tarda el envío?") and opens a real ticket in Postgres when you ask for one ("open a ticket", "talk to a human"). Streaming, tools, storage, rate limiting and the deploy are all real; only the reasoning is fixed.
 
+The interface follows your browser language (English or Spanish, switchable from the header) and accepts voice input in browsers with the Web Speech API (Chrome, Edge, Safari); the orb reacts to what the assistant is doing and to your voice.
+
 How it works (hexagonal layers, request flow, streaming, persistence): see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Stack
