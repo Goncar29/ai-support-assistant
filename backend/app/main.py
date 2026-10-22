@@ -13,13 +13,13 @@ from app.infrastructure.in_memory import (
     InMemoryRateLimiter,
     InMemoryTicketRepository,
 )
-from app.infrastructure.llm.echo_provider import EchoProvider
+from app.infrastructure.llm.demo_provider import DemoProvider
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 
 
 def build_llm(settings: Settings) -> LLMProvider:
     if not settings.anthropic_api_key:
-        return EchoProvider()
+        return DemoProvider()  # free: a scripted model drives the real tools
     import anthropic
 
     from app.infrastructure.llm.anthropic_provider import AnthropicProvider
