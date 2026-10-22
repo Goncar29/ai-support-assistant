@@ -1,45 +1,60 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { ChatHeader } from "./components/ChatHeader";
+import { Composer } from "./components/Composer";
+import { MessageList } from "./components/MessageList";
+import { orbState } from "./components/orbState";
+import { Welcome } from "./components/Welcome";
 import { useChat } from "./hooks/useChat";
-import { MESSAGES, chatErrorText, toolLabel } from "./i18n/messages";
-import "./App.css";
+import { usePointerGlow } from "./hooks/usePointerGlow";
+import { useSpeechInput } from "./hooks/useSpeechInput";
+import { chatErrorText, toolLabel } from "./i18n/messages";
+import { useLocale } from "./i18n/useLocale";
 
 export default function App() {
+  const { locale, setLocale, t } = useLocale();
   const { messages, streaming, activity, error, send } = useChat();
   const [input, setInput] = useState("");
+  const speech = useSpeechInput(locale, setInput);
+  usePointerGlow();
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || streaming) return;
+  const last = messages.at(-1);
+  const replyText = last?.role === "assistant" ? last.text : "";
+  const orb = orbState({ streaming, activity, replyText, listening: speech.listening });
+  const status = activity ? toolLabel(t, activity) : streaming && !replyText ? t.thinking : null;
+
+  function submit(text: string) {
     setInput("");
     void send(text);
   }
 
-  const waitingForFirstToken = streaming && messages.at(-1)?.text === "";
-
   return (
-    <main className="chat">
-      <h1>AI Support Assistant</h1>
-      <ul className="messages" aria-live="polite">
-        {messages
-          .filter((m) => m.text)
-          .map((m) => (
-            <li key={m.id} className={m.role}>
-              {m.text}
-            </li>
-          ))}
-        {(activity || waitingForFirstToken) && <li className="assistant status">{activity ? toolLabel(MESSAGES.en, activity) : MESSAGES.en.thinking}</li>}
-      </ul>
-      {error && <p role="alert">{chatErrorText(MESSAGES.en, error)}</p>}
-      <form onSubmit={onSubmit}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask something…"
-          aria-label="Message"
-        />
-        <button disabled={streaming}>Send</button>
-      </form>
-    </main>
+    <div className="app">
+      <div className="aurora" aria-hidden="true" />
+      <div className="spotlight" aria-hidden="true" />
+      <ChatHeader t={t} locale={locale} onLocaleChange={setLocale} orb={orb} level={speech.level} />
+      <main className="conversation">
+        {messages.length === 0 ? (
+          <Welcome t={t} orb={orb} level={speech.level} disabled={streaming} onPick={submit} />
+        ) : (
+          <MessageList messages={messages} status={status} />
+        )}
+      </main>
+      <footer className="composer-dock">
+        {error && (
+          <p className="notice" role="alert">
+            {chatErrorText(t, error)}
+          </p>
+        )}
+        {speech.error && (
+          <p className="notice" role="alert">
+            {speech.error === "mic_denied" ? t.errors.micDenied : t.errors.speechFailed}
+            <button type="button" aria-label={t.dismiss} onClick={speech.dismissError}>
+              ×
+            </button>
+          </p>
+        )}
+        <Composer t={t} value={input} onChange={setInput} onSend={submit} streaming={streaming} speech={speech} />
+      </footer>
+    </div>
   );
 }
