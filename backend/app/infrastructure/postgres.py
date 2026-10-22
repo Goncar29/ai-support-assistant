@@ -17,6 +17,9 @@ from app.domain.rate_limit import RateLimitDecision, current_window, decide
 from app.domain.ticket import Ticket
 
 CONNECT_TIMEOUT_SECONDS = 5  # enough to wake a suspended Neon compute; fail fast when the database is down
+# Every chat request waits on the limiter, which fails open, so an outage should cost as little
+# as possible. 2 s is the floor psycopg enforces; a slower Neon wake lets one request through.
+LIMITER_CONNECT_TIMEOUT_SECONDS = 2
 PRUNE_PROBABILITY = 0.01  # share of rate limit hits that also delete rows from past windows
 PRUNE_BATCH_SIZE = 500  # rows one prune may delete, so a large backlog never slows a single request much
 
@@ -27,9 +30,9 @@ def format_ticket_id(number: int) -> str:
     return "T-%04d" % number
 
 
-def connect(database_url: str) -> psycopg.Connection:
+def connect(database_url: str, timeout: int = CONNECT_TIMEOUT_SECONDS) -> psycopg.Connection:
     # prepare_threshold=None: PgBouncer in transaction mode cannot keep server-side prepared statements.
-    return psycopg.connect(database_url, prepare_threshold=None, connect_timeout=CONNECT_TIMEOUT_SECONDS)
+    return psycopg.connect(database_url, prepare_threshold=None, connect_timeout=timeout)
 
 
 class PostgresTicketRepository:
@@ -123,7 +126,7 @@ class PostgresRateLimiter:
 
     def hit(self, key: str) -> RateLimitDecision:
         start, retry_after = current_window(self._clock(), self._window_seconds)
-        with connect(self._database_url) as conn:
+        with connect(self._database_url, timeout=LIMITER_CONNECT_TIMEOUT_SECONDS) as conn:
             row = conn.execute(
                 sql.SQL(
                     "INSERT INTO {t} AS r (key, window_start, count) VALUES (%s, %s, 1)"
