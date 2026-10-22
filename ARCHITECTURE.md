@@ -21,7 +21,7 @@ flowchart LR
 | Frontend | React + TypeScript (Vite), Vitest | `frontend/` |
 | Backend API | FastAPI, Server-Sent Events | `backend/app/api/` |
 | Agent | Provider-neutral tool-use loop | `backend/app/application/` |
-| LLM | Claude Haiku 5.5 via the Anthropic SDK; offline echo fallback | `backend/app/infrastructure/llm/` |
+| LLM | Claude Haiku 5.5 via the Anthropic SDK; scripted demo fallback | `backend/app/infrastructure/llm/` |
 | Persistence | Postgres (Neon) via psycopg 3; in-memory fallback | `backend/app/infrastructure/` |
 | Notifications | n8n webhook, best-effort | `backend/app/infrastructure/notifications.py`, `n8n/` |
 | CI | GitHub Actions: backend tests (including Postgres integration against a `postgres:17` service), frontend lint + tests + build | `.github/workflows/` |
@@ -34,7 +34,7 @@ Dependencies point **inward only**. Outer layers know inner ones; inner layers n
 flowchart TB
     subgraph Outside["Outer layers"]
         API["api/<br/>HTTP routes, request validation"]
-        INF["infrastructure/<br/>adapters: Anthropic, echo, Postgres, in-memory, n8n"]
+        INF["infrastructure/<br/>adapters: Anthropic, demo, Postgres, in-memory, n8n"]
         MAIN["main.py + config.py<br/>composition root, settings"]
     end
     subgraph Core["Core (no frameworks, no env vars)"]
@@ -52,7 +52,7 @@ flowchart TB
 |---|---|---|
 | `domain/` | Business entities. Today: `Ticket(id, title, description)`. | `domain/ticket.py` |
 | `application/` | Use cases: the agent loop, the tools, and the **ports** on both sides of the hexagon. | `support_agent.py`, `support_tools.py`, `ports.py`, `conversation.py` |
-| `infrastructure/` | **Adapters**: concrete implementations of the ports. | `llm/anthropic_provider.py`, `llm/echo_provider.py`, `postgres.py`, `in_memory.py`, `notifications.py` |
+| `infrastructure/` | **Adapters**: concrete implementations of the ports. | `llm/anthropic_provider.py`, `llm/demo_provider.py`, `postgres.py`, `in_memory.py`, `notifications.py` |
 | `api/` | Driving adapter: translates HTTP into calls to the `ChatUseCase` port and its events into HTTP. It never sees `SupportAgent`. | `api/routes.py` |
 | `main.py` | **Composition root**: the only place that decides which adapter plugs into which port. | `main.py` |
 | `config.py` | Reads every environment variable in one place and validates it at startup. | `config.py` |
@@ -66,7 +66,7 @@ A **port** is an interface on the edge of the application; an **adapter** is the
 
 | Driven port (`application/ports.py`) | Adapter used when... | Otherwise |
 |---|---|---|
-| `LLMProvider` | `ANTHROPIC_API_KEY` is set → `AnthropicProvider` | `EchoProvider` (offline mode, echoes the message) |
+| `LLMProvider` | `ANTHROPIC_API_KEY` is set → `AnthropicProvider` | `DemoProvider` (demo mode: a scripted model that searches the FAQ and opens a ticket only when asked) |
 | `TicketRepository` | `DATABASE_URL` is set → `PostgresTicketRepository` | `InMemoryTicketRepository` (lost on restart) |
 | `TicketNotifier` | `N8N_WEBHOOK_URL` is set → `N8nNotifier` | `NullNotifier` |
 | `FaqRepository` | always `InMemoryFaqRepository` with the built-in FAQ | — |
@@ -83,7 +83,7 @@ flowchart LR
         UC -.implemented by.-> AG
     end
     subgraph Driven["Driven side"]
-        L[AnthropicProvider / EchoProvider]
+        L[AnthropicProvider / DemoProvider]
         R[Postgres / InMemory tickets]
         N[N8nNotifier / NullNotifier]
         F[InMemoryFaqRepository]
@@ -245,7 +245,7 @@ Every setting is read in `backend/app/config.py`. Locally, put them in `backend/
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Enables Claude | unset → offline echo |
+| `ANTHROPIC_API_KEY` | Enables Claude | unset → demo mode |
 | `ANTHROPIC_MODEL` | Model id | `claude-haiku-5-5` |
 | `ANTHROPIC_EFFORT` | Reasoning effort; lower is faster | `low` |
 | `DATABASE_URL` | Neon pooled connection string | unset → in-memory |

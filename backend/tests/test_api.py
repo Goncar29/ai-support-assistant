@@ -9,6 +9,7 @@ from app.application.ports import ReplyFinished, ToolStarted
 from app.config import Settings
 from app.main import build_notifier, build_ticket_repository, create_app
 from app.infrastructure.in_memory import InMemoryTicketRepository
+from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 from app.infrastructure.postgres import PostgresTicketRepository
 
@@ -21,10 +22,10 @@ def test_health():
     assert make_client().get("/health").json() == {"status": "ok"}
 
 
-def test_chat_offline_echo_without_api_key():
-    res = make_client(anthropic_api_key=None).post("/chat", json={"message": "hola"})
+def test_chat_runs_in_demo_mode_without_api_key():
+    res = make_client(anthropic_api_key=None).post("/chat", json={"message": "How do I reset my password?"})
     assert res.status_code == 200
-    assert "hola" in res.json()["reply"]
+    assert res.json() == {"reply": "[demo mode] Use 'Forgot password' on the login page to reset it."}
 
 
 def test_chat_rejects_empty_message():
@@ -45,8 +46,11 @@ def test_chat_stream_sends_deltas_then_done():
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(res.text)
-    assert events[0] == ("delta", {"text": "[offline mode] You said: hola"})
-    assert events[-1] == ("done", {"reply": "[offline mode] You said: hola"})
+    reply = "[demo mode] " + NO_FAQ_MATCH_REPLY
+    assert events[0] == ("tool", {"name": "search_faq"})
+    deltas = [data["text"] for name, data in events if name == "delta"]
+    assert len(deltas) > 1 and "".join(deltas) == reply
+    assert events[-1] == ("done", {"reply": reply})
 
 
 def test_chat_stream_reports_tool_activity():

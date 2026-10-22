@@ -4,7 +4,7 @@ A customer-support chat powered by Claude. The agent searches an FAQ, answers in
 
 **Live demo:** https://ai-support-assistant-sigma.vercel.app (API: https://ai-support-assistant-api.vercel.app/health)
 
-> The live demo currently runs in **offline mode**: no Anthropic API key is configured, so the backend echoes your message instead of calling Claude. Everything else (streaming, the deploy, CORS) is real.
+> The live demo currently runs in **demo mode**: no Anthropic API key is configured, so a scripted model stands in for Claude. It still drives the real agent loop: it searches the FAQ (try refunds, shipping or passwords) and opens a real ticket in Postgres when you ask for one ("open a ticket", "talk to a human"). Streaming, tools, storage, rate limiting and the deploy are all real; only the reasoning is fixed.
 
 How it works (hexagonal layers, request flow, streaming, persistence): see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -24,7 +24,7 @@ How it works (hexagonal layers, request flow, streaming, persistence): see [ARCH
 
 Requirements: Python 3.14 (pinned in `backend/.python-version`) and Node 22+.
 
-**Backend** (works with no configuration: offline echo, in-memory tickets):
+**Backend** (works with no configuration: demo mode, in-memory tickets):
 
     cd backend
     py -3.14 -m venv .venv && .venv\Scripts\activate
@@ -48,7 +48,7 @@ Backend (all optional):
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Enables the Claude agent; without it the API echoes messages | unset (offline mode) |
+| `ANTHROPIC_API_KEY` | Enables the Claude agent; without it a scripted demo model drives the tools | unset (demo mode) |
 | `ANTHROPIC_MODEL` | Claude model id | `claude-haiku-5-5` |
 | `ANTHROPIC_EFFORT` | Reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`); lower is faster | `low` |
 | `DATABASE_URL` | Postgres connection string (use Neon's pooled `-pooler` host); without it tickets live in memory and are lost on restart | unset (in-memory) |
