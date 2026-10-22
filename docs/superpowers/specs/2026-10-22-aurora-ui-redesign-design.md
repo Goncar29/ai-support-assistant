@@ -49,7 +49,8 @@ All components live in `frontend/src/components/`, one per file, and are present
 
 - `hooks/usePointerGlow.ts`: listens to `pointermove` on the page and writes `--x`/`--y` (page) and `--ex`/`--ey` (per `.glow` element) in a `requestAnimationFrame`. It never triggers React re-renders. It is active only when `(hover: hover)` matches and `prefers-reduced-motion` does not.
 - `hooks/useSpeechInput.ts`:
-  - Returns `{ supported, listening, level, transcript, error, start, stop }`.
+  - Signature: `useSpeechInput(locale, onTranscript)`. Returns `{ supported, listening, level, error, start, stop, dismissError }`.
+  - It delivers the live transcript through `onTranscript`, so the composer input updates directly. Starting a new dictation first calls `onTranscript("")`.
   - It wraps `SpeechRecognition` (or `webkitSpeechRecognition`) with `interimResults = true` and `lang` taken from the locale (`en-US` / `es-ES`).
   - The level comes from `getUserMedia({ audio: true })` and an `AnalyserNode` (RMS of the time-domain data, clamped to 0..1).
   - On end, the final transcript stays in the input for review; nothing is sent automatically.
@@ -106,8 +107,8 @@ Vitest with jsdom, plus the existing tests:
 - `orbState`: each of the 4 states, and `listening` taking precedence.
 - `useLocale`: a stored choice beats `navigator.language`; `es-AR` resolves to `es`; an unknown language falls back to `en`; `setLocale` persists and updates `<html lang>`; a throwing `localStorage` falls back without crashing.
 - `useSpeechInput`: with a fake `SpeechRecognition`:
-  - Interim results update `transcript`.
-  - `stop`/end leaves the final transcript.
+  - Interim results call `onTranscript`.
+  - `stop`/end leaves the final transcript as the last `onTranscript` value.
   - `supported` is false without the API.
   - A permission error sets `error`.
   - Unmount stops recognition.
