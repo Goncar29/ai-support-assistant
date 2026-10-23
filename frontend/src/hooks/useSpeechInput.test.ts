@@ -97,6 +97,20 @@ describe("useSpeechInput", () => {
     expect(onTranscript).toHaveBeenLastCalledWith("Open a ticket");
   });
 
+  it("cancels without letting a late result refill the input", async () => {
+    const onTranscript = vi.fn();
+    const { result } = renderHook(() => useSpeechInput("es", onTranscript));
+    await act(() => result.current.start());
+    act(() => last().say("How long does shipping take?"));
+
+    act(() => result.current.cancel());
+    act(() => last().say("Jau long das chipin teik")); // the late final result a stop() would deliver
+
+    expect(result.current.listening).toBe(false);
+    expect(last().aborted).toBe(true);
+    expect(onTranscript).toHaveBeenLastCalledWith("How long does shipping take?");
+  });
+
   it("explains a denied microphone and stops listening", async () => {
     const { result } = renderHook(() => useSpeechInput("en", () => {}));
     await act(() => result.current.start());

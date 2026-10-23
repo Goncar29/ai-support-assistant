@@ -137,5 +137,8 @@ export function useSpeechInput(locale: Locale, onTranscript: (text: string) => v
 
   const dismissError = useCallback(() => setError(null), []);
 
-  return { supported, listening, level, error, start, stop, dismissError };
+  // Ends dictation now and drops any result still on its way (unlike `stop`).
+  const cancel = end;
+
+  return { supported, listening, level, error, start, stop, cancel, dismissError };
 }
