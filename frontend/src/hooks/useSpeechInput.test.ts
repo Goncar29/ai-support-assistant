@@ -45,6 +45,30 @@ describe("useSpeechInput", () => {
     expect(result.current.supported).toBe(false);
   });
 
+  it("is unsupported on Brave, which exposes the API but disables its speech service", () => {
+    Object.defineProperty(navigator, "brave", { value: { isBrave: () => Promise.resolve(true) }, configurable: true });
+    try {
+      const { result } = renderHook(() => useSpeechInput("en", () => {}));
+      expect(result.current.supported).toBe(false);
+    } finally {
+      delete (navigator as { brave?: unknown }).brave;
+    }
+  });
+
+  it("hides the mic once the browser reports its speech service unavailable", async () => {
+    const { result } = renderHook(() => useSpeechInput("en", () => {}));
+    await act(() => result.current.start());
+
+    act(() => {
+      last().onerror?.({ error: "network" });
+      last().onend?.();
+    });
+
+    expect(result.current.error).toBe("unavailable");
+    expect(result.current.supported).toBe(false);
+    expect(result.current.listening).toBe(false);
+  });
+
   it("listens in the chosen language and streams the transcript", async () => {
     const onTranscript = vi.fn();
     const { result } = renderHook(() => useSpeechInput("es", onTranscript));
@@ -71,6 +95,20 @@ describe("useSpeechInput", () => {
     expect(result.current.listening).toBe(false);
     expect(result.current.level).toBe(0);
     expect(onTranscript).toHaveBeenLastCalledWith("Open a ticket");
+  });
+
+  it("cancels without letting a late result refill the input", async () => {
+    const onTranscript = vi.fn();
+    const { result } = renderHook(() => useSpeechInput("es", onTranscript));
+    await act(() => result.current.start());
+    act(() => last().say("How long does shipping take?"));
+
+    act(() => result.current.cancel());
+    act(() => last().say("Jau long das chipin teik")); // the late final result a stop() would deliver
+
+    expect(result.current.listening).toBe(false);
+    expect(last().aborted).toBe(true);
+    expect(onTranscript).toHaveBeenLastCalledWith("How long does shipping take?");
   });
 
   it("explains a denied microphone and stops listening", async () => {

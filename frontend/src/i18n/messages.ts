@@ -1,4 +1,5 @@
 import type { ChatError } from "../api/chatStream";
+import type { SpeechError } from "../hooks/useSpeechInput";
 
 export type Locale = "en" | "es";
 export const LOCALES: readonly Locale[] = ["en", "es"];
@@ -26,6 +27,7 @@ export type Messages = {
     rateLimited: (seconds: number | null) => string;
     unexpected: string;
     micDenied: string;
+    speechUnavailable: string;
     speechFailed: string;
   };
 };
@@ -56,6 +58,7 @@ const en: Messages = {
       } and try again.`,
     unexpected: "Something unexpected happened. Please try again.",
     micDenied: "Allow microphone access to use your voice.",
+    speechUnavailable: "This browser doesn't offer speech recognition. Try Chrome or Edge.",
     speechFailed: "Your voice could not be recognized. Please try again.",
   },
 };
@@ -86,6 +89,7 @@ const es: Messages = {
       } e inténtalo de nuevo.`,
     unexpected: "Ocurrió algo inesperado. Inténtalo de nuevo.",
     micDenied: "Permite el acceso al micrófono para usar tu voz.",
+    speechUnavailable: "Este navegador no ofrece reconocimiento de voz. Prueba en Chrome o Edge.",
     speechFailed: "No se pudo reconocer tu voz. Inténtalo de nuevo.",
   },
 };
@@ -109,5 +113,16 @@ export function chatErrorText(t: Messages, error: ChatError): string {
       return t.errors.server;
     case "unexpected":
       return t.errors.unexpected;
+  }
+}
+
+export function speechErrorText(t: Messages, error: SpeechError): string {
+  switch (error) {
+    case "mic_denied":
+      return t.errors.micDenied;
+    case "unavailable":
+      return t.errors.speechUnavailable;
+    case "failed":
+      return t.errors.speechFailed;
   }
 }

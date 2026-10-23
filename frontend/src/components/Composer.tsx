@@ -14,6 +14,7 @@ export type ComposerProps = {
     level: number;
     start: () => void | Promise<void>;
     stop: () => void;
+    cancel: () => void;
   };
 };
 
@@ -23,7 +24,8 @@ export function Composer({ t, value, onChange, onSend, streaming, speech }: Comp
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!text || streaming) return;
-    if (speech.listening) speech.stop();
+    // Cancel, not stop: a late final result would refill the input after sending.
+    if (speech.listening) speech.cancel();
     onSend(text);
   }
 

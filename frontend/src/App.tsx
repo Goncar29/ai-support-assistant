@@ -7,7 +7,7 @@ import { Welcome } from "./components/Welcome";
 import { useChat } from "./hooks/useChat";
 import { usePointerGlow } from "./hooks/usePointerGlow";
 import { useSpeechInput } from "./hooks/useSpeechInput";
-import { chatErrorText, toolLabel } from "./i18n/messages";
+import { chatErrorText, speechErrorText, toolLabel } from "./i18n/messages";
 import { useLocale } from "./i18n/useLocale";
 
 export default function App() {
@@ -47,7 +47,7 @@ export default function App() {
         )}
         {speech.error && (
           <p className="notice" role="alert">
-            {speech.error === "mic_denied" ? t.errors.micDenied : t.errors.speechFailed}
+            {speechErrorText(t, speech.error)}
             <button type="button" aria-label={t.dismiss} onClick={speech.dismissError}>
               ×
             </button>
