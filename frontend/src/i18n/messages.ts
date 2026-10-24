@@ -34,7 +34,7 @@ export type Messages = {
 
 const en: Messages = {
   placeholder: "Ask something…",
-  listening: "Listening…",
+  listening: "Listening in English…",
   send: "Send",
   startListening: "Start voice input",
   stopListening: "Stop voice input",
@@ -65,7 +65,7 @@ const en: Messages = {
 
 const es: Messages = {
   placeholder: "Pregunta algo…",
-  listening: "Escuchando…",
+  listening: "Escuchando en español…",
   send: "Enviar",
   startListening: "Iniciar entrada por voz",
   stopListening: "Detener entrada por voz",
