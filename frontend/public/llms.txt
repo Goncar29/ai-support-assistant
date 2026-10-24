@@ -1,0 +1,9 @@
+# AI Support Assistant
+
+> A portfolio project: an AI support chat that answers FAQ questions (refunds, shipping, passwords) and opens support tickets. It works in English and Spanish, by text or by voice. The live demo runs a scripted demo model, so it costs nothing to try.
+
+## Links
+
+- [Live demo](https://ai-support-assistant-sigma.vercel.app): the chat interface
+- [API health check](https://ai-support-assistant-api.vercel.app/health): the FastAPI backend
+- [Source code](https://github.com/Goncar29/ai-support-assistant): hexagonal FastAPI backend and React frontend
