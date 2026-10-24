@@ -72,8 +72,16 @@ describe("Composer", () => {
     });
     const mic = screen.getByRole("button", { name: "Stop voice input" });
     expect(mic.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("textbox").getAttribute("placeholder")).toBe("Listening…");
+    expect(screen.getByRole("textbox").getAttribute("placeholder")).toBe("Listening in English…");
     fireEvent.click(mic);
     expect(props.speech.stop).toHaveBeenCalled();
+  });
+
+  it("names the recognition language in Spanish while listening", () => {
+    renderComposer({
+      t: MESSAGES.es,
+      speech: { supported: true, listening: true, level: 0.5, start: vi.fn(), stop: vi.fn(), cancel: vi.fn() },
+    });
+    expect(screen.getByRole("textbox").getAttribute("placeholder")).toBe("Escuchando en español…");
   });
 });
