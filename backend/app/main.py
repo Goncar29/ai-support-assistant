@@ -17,7 +17,8 @@ from app.infrastructure.llm.demo_provider import DemoProvider
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 
 
-# A stalled provider call must end in an error event, not a silent chat; OpenAI's default is 10 minutes.
+# A stalled provider call must end in an error event, not a silent chat. google-genai has no
+# timeout by default and waited forever on an overloaded model; OpenAI's default is 10 minutes.
 LLM_TIMEOUT_SECONDS = 30
 
 
@@ -30,6 +31,14 @@ def build_llm(settings: Settings) -> LLMProvider:
 
         client = openai.OpenAI(api_key=settings.openai_api_key, timeout=LLM_TIMEOUT_SECONDS)
         return OpenAIProvider(client, model=settings.openai_model)
+    if settings.provider == "gemini":
+        from google import genai
+
+        from app.infrastructure.llm.gemini_provider import GeminiProvider
+
+        http_options = {"timeout": LLM_TIMEOUT_SECONDS * 1000}  # milliseconds
+        client = genai.Client(api_key=settings.gemini_api_key, http_options=http_options)
+        return GeminiProvider(client, model=settings.gemini_model)
     if settings.provider == "anthropic":
         import anthropic
 
