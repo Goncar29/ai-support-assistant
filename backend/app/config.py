@@ -6,8 +6,9 @@ from typing import Mapping, Optional, Tuple
 DEFAULT_MODEL = "claude-haiku-5-5"
 DEFAULT_EFFORT = "low"  # chat replies favor latency over deep reasoning
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
-LLM_PROVIDERS = ("anthropic", "openai", "demo")
+LLM_PROVIDERS = ("anthropic", "openai", "gemini", "demo")
 DEFAULT_OPENAI_MODEL = "gpt-6-luna"  # OpenAI's lowest-cost model with function calling
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 DEFAULT_RATE_LIMIT_REQUESTS = 10  # chat requests per client...
 DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60  # ...per minute
@@ -31,6 +32,8 @@ class Settings:
     llm_provider: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_model: str = DEFAULT_OPENAI_MODEL
+    gemini_api_key: Optional[str] = None
+    gemini_model: str = DEFAULT_GEMINI_MODEL
 
     @property
     def provider(self) -> str:
@@ -45,7 +48,8 @@ class Settings:
                 "LLM_PROVIDER must be one of %s, got %r" % (", ".join(LLM_PROVIDERS), self.llm_provider)
             )
         keys = {"anthropic": ("ANTHROPIC_API_KEY", self.anthropic_api_key),
-                "openai": ("OPENAI_API_KEY", self.openai_api_key)}
+                "openai": ("OPENAI_API_KEY", self.openai_api_key),
+                "gemini": ("GEMINI_API_KEY", self.gemini_api_key)}
         if self.provider in keys and not keys[self.provider][1]:
             raise ValueError("LLM_PROVIDER=%s needs %s" % (self.provider, keys[self.provider][0]))
         if self.anthropic_effort not in EFFORT_LEVELS:
@@ -77,6 +81,8 @@ class Settings:
             llm_provider=(env.get("LLM_PROVIDER") or "").strip().lower() or None,
             openai_api_key=env.get("OPENAI_API_KEY") or None,
             openai_model=env.get("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
+            gemini_api_key=env.get("GEMINI_API_KEY") or None,
+            gemini_model=env.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
         )
 
 

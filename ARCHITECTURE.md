@@ -21,7 +21,7 @@ flowchart LR
 | Frontend | React + TypeScript (Vite), Vitest | `frontend/` |
 | Backend API | FastAPI, Server-Sent Events | `backend/app/api/` |
 | Agent | Provider-neutral tool-use loop | `backend/app/application/` |
-| LLM | Claude Haiku 5.5 (Anthropic SDK) or OpenAI (Responses API), chosen by `LLM_PROVIDER`; scripted demo fallback | `backend/app/infrastructure/llm/` |
+| LLM | Claude Haiku 5.5 (Anthropic SDK), OpenAI (Responses API) or Gemini (google-genai), chosen by `LLM_PROVIDER`; scripted demo fallback | `backend/app/infrastructure/llm/` |
 | Persistence | Postgres (Neon) via psycopg 3; in-memory fallback | `backend/app/infrastructure/` |
 | Notifications | n8n webhook, best-effort | `backend/app/infrastructure/notifications.py`, `n8n/` |
 | CI | GitHub Actions: backend tests (including Postgres integration against a `postgres:17` service), frontend lint + tests + build | `.github/workflows/` |
@@ -34,7 +34,7 @@ Dependencies point **inward only**. Outer layers know inner ones; inner layers n
 flowchart TB
     subgraph Outside["Outer layers"]
         API["api/<br/>HTTP routes, request validation"]
-        INF["infrastructure/<br/>adapters: Anthropic, OpenAI, demo, Postgres, in-memory, n8n"]
+        INF["infrastructure/<br/>adapters: Anthropic, OpenAI, Gemini, demo, Postgres, in-memory, n8n"]
         MAIN["main.py + config.py<br/>composition root, settings"]
     end
     subgraph Core["Core (no frameworks, no env vars)"]
@@ -66,7 +66,7 @@ A **port** is an interface on the edge of the application; an **adapter** is the
 
 | Driven port (`application/ports.py`) | Adapter used when... | Otherwise |
 |---|---|---|
-| `LLMProvider` | `LLM_PROVIDER=openai` → `OpenAIProvider`; `LLM_PROVIDER=anthropic`, or `LLM_PROVIDER` unset and `ANTHROPIC_API_KEY` set → `AnthropicProvider` | `DemoProvider` (demo mode: a scripted model that searches the FAQ and opens a ticket only when asked) |
+| `LLMProvider` | `LLM_PROVIDER=openai` → `OpenAIProvider`; `LLM_PROVIDER=gemini` → `GeminiProvider`; `LLM_PROVIDER=anthropic`, or `LLM_PROVIDER` unset and `ANTHROPIC_API_KEY` set → `AnthropicProvider` | `DemoProvider` (demo mode: a scripted model that searches the FAQ and opens a ticket only when asked) |
 | `TicketRepository` | `DATABASE_URL` is set → `PostgresTicketRepository` | `InMemoryTicketRepository` (lost on restart) |
 | `TicketNotifier` | `N8N_WEBHOOK_URL` is set → `N8nNotifier` | `NullNotifier` |
 | `FaqRepository` | always `InMemoryFaqRepository` with the built-in FAQ | — |
@@ -83,7 +83,7 @@ flowchart LR
         UC -.implemented by.-> AG
     end
     subgraph Driven["Driven side"]
-        L[Anthropic / OpenAI / DemoProvider]
+        L[Anthropic / OpenAI / Gemini / DemoProvider]
         R[Postgres / InMemory tickets]
         N[N8nNotifier / NullNotifier]
         F[InMemoryFaqRepository]
@@ -245,12 +245,14 @@ Every setting is read in `backend/app/config.py`. Locally, put them in `backend/
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `LLM_PROVIDER` | `anthropic`, `openai` or `demo`; startup fails if the chosen provider's key is missing | unset → Claude if `ANTHROPIC_API_KEY` is set, else demo mode |
+| `LLM_PROVIDER` | `anthropic`, `openai`, `gemini` or `demo`; startup fails if the chosen provider's key is missing | unset → Claude if `ANTHROPIC_API_KEY` is set, else demo mode |
 | `ANTHROPIC_API_KEY` | Enables Claude | unset → demo mode |
 | `ANTHROPIC_MODEL` | Model id | `claude-haiku-5-5` |
 | `ANTHROPIC_EFFORT` | Reasoning effort; lower is faster | `low` |
 | `OPENAI_API_KEY` | Key for `LLM_PROVIDER=openai` | unset |
 | `OPENAI_MODEL` | OpenAI model id | `gpt-6-luna` |
+| `GEMINI_API_KEY` | Key for `LLM_PROVIDER=gemini` | unset |
+| `GEMINI_MODEL` | Gemini model id | `gemini-3.8-flash` |
 | `DATABASE_URL` | Neon pooled connection string | unset → in-memory |
 | `N8N_WEBHOOK_URL` | Ticket notification webhook | unset → no notification |
 | `CORS_ORIGINS` | Origins allowed to call the API | `http://localhost:5173` |
@@ -280,7 +282,7 @@ npm run dev
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Backend unit + API | `cd backend && python -m pytest` | Agent loop with fake LLMs, tools, SSE framing, settings, adapter selection, Anthropic and OpenAI adapter translation, and the layer dependency rules (`test_architecture.py`) |
+| Backend unit + API | `cd backend && python -m pytest` | Agent loop with fake LLMs, tools, SSE framing, settings, adapter selection, Anthropic, OpenAI and Gemini adapter translation, and the layer dependency rules (`test_architecture.py`) |
 | Postgres integration | same, with `TEST_DATABASE_URL` set | Real database, each run in a throwaway schema that is dropped afterwards; CI runs them against a `postgres:17` service |
 | Frontend | `cd frontend && npm test` | SSE parser (split frames, errors) and the `useChat` hook |
 
@@ -300,6 +302,6 @@ Keeping the function and the database in the same region keeps every query a sho
 
 ## Where to go next
 
-- Add another LLM provider: implement `LLMProvider` in `infrastructure/llm/`, add its name to `LLM_PROVIDERS` in `config.py` and select it in `build_llm` (`main.py`). `openai_provider.py` is a worked example.
+- Add another LLM provider: implement `LLMProvider` in `infrastructure/llm/`, add its name to `LLM_PROVIDERS` in `config.py` and select it in `build_llm` (`main.py`). `openai_provider.py` and `gemini_provider.py` are two worked examples.
 - Move the FAQ to Postgres: implement `FaqRepository` in `infrastructure/postgres.py`.
 - Change what happens on a new ticket: implement `TicketNotifier`, or edit the n8n flow in `n8n/ticket-notification.json`.
