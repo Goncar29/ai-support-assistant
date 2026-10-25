@@ -14,6 +14,7 @@ export type Messages = {
   dismiss: string;
   demoBadge: string;
   languageToggle: string;
+  newConversation: string;
   greeting: string;
   subtitle: string;
   suggestions: readonly string[];
@@ -43,6 +44,7 @@ const en: Messages = {
   dismiss: "Dismiss",
   demoBadge: "demo",
   languageToggle: "Language",
+  newConversation: "New conversation",
   greeting: "How can I help you today?",
   subtitle: "Ask about refunds, shipping or passwords, by text or by voice.",
   suggestions: ["How long does shipping take?", "How do refunds work?", "I forgot my password", "Open a ticket"],
@@ -75,6 +77,7 @@ const es: Messages = {
   dismiss: "Cerrar",
   demoBadge: "demo",
   languageToggle: "Idioma",
+  newConversation: "Nueva conversación",
   greeting: "¿En qué puedo ayudarte hoy?",
   subtitle: "Pregunta sobre reembolsos, envíos o contraseñas, por texto o por voz.",
   suggestions: ["¿Cuánto tarda el envío?", "¿Cómo funcionan los reembolsos?", "Olvidé mi contraseña", "Abrir un ticket"],

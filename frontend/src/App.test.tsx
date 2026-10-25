@@ -32,6 +32,32 @@ describe("App", () => {
     expect(document.documentElement.lang).toBe("es");
   });
 
+  it("offers a new conversation that brings the welcome back", async () => {
+    streamChatMock.mockImplementation(async (_message, onEvent) => onEvent({ type: "done", reply: "5 days." }));
+    render(<App />);
+    expect(screen.queryByRole("button", { name: "New conversation" })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "How long does shipping take?" }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
+
+    expect(screen.getByRole("heading", { name: "How can I help you today?" })).toBeTruthy();
+    expect(screen.queryByText("5 days.")).toBeNull();
+  });
+
+  it("names the new conversation button in Spanish", async () => {
+    streamChatMock.mockImplementation(async (_message, onEvent) => onEvent({ type: "done", reply: "5 días." }));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "ES" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "¿Cuánto tarda el envío?" }));
+    });
+
+    expect(screen.getByRole("button", { name: "Nueva conversación" })).toBeTruthy();
+  });
+
   it("sends a suggestion and shows the streamed reply", async () => {
     const answer = "Standard shipping takes 3-7 business days.";
     streamChatMock.mockImplementation(async (_message, onEvent) => {

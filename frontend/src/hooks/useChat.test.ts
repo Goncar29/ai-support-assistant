@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatRequestError, streamChat, type ChatStreamEvent } from "../api/chatStream";
+import { CONVERSATION_STORAGE_KEY } from "./conversationStorage";
 import { useChat } from "./useChat";
 
 vi.mock("../api/chatStream", async (importOriginal) => ({
@@ -19,6 +20,7 @@ describe("useChat", () => {
   // Braces matter: a function returned from beforeEach is run as a teardown hook.
   beforeEach(() => {
     streamChatMock.mockReset();
+    localStorage.clear();
   });
 
   it("streams deltas into one reply and settles on the final answer", async () => {
@@ -144,6 +146,51 @@ describe("useChat", () => {
     const history = streamChatMock.mock.calls[6][3];
     expect(history).toHaveLength(10);
     expect(history?.[0]).toEqual({ role: "user", content: "question 2" });
+  });
+
+  it("restores the saved conversation and keeps using it as history", async () => {
+    const saved = [
+      { id: "1", role: "user", text: "I want a refund" },
+      { id: "2", role: "assistant", text: "Refunds take 5 days." },
+    ];
+    localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(saved));
+    replyWith({ type: "done", reply: "From approval." });
+    const { result } = renderHook(() => useChat());
+
+    expect(texts(result.current.messages)).toEqual([
+      ["user", "I want a refund"],
+      ["assistant", "Refunds take 5 days."],
+    ]);
+    await act(() => result.current.send("Since when?"));
+
+    expect(streamChatMock.mock.calls[0][3]).toEqual([
+      { role: "user", content: "I want a refund" },
+      { role: "assistant", content: "Refunds take 5 days." },
+    ]);
+  });
+
+  it("saves the conversation once the reply finishes", async () => {
+    replyWith({ type: "done", reply: "5 days." });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("refund?"));
+
+    const stored = JSON.parse(localStorage.getItem(CONVERSATION_STORAGE_KEY) ?? "[]");
+    expect(texts(stored)).toEqual([
+      ["user", "refund?"],
+      ["assistant", "5 days."],
+    ]);
+  });
+
+  it("starts a new conversation and forgets the saved one", async () => {
+    replyWith({ type: "done", reply: "5 days." });
+    const { result } = renderHook(() => useChat());
+    await act(() => result.current.send("refund?"));
+
+    act(() => result.current.reset());
+
+    expect(result.current.messages).toEqual([]);
+    expect(localStorage.getItem(CONVERSATION_STORAGE_KEY)).toBeNull();
   });
 
   it("reports an unexpected failure without leaking its message", async () => {
