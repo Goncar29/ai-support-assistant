@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.application.conversation import TextDelta
+from app.application.conversation import ModelUnavailable, TextDelta
 from app.application.ports import ChatUseCase, RateLimiter, ReplyFinished, ToolStarted
 from app.domain.rate_limit import client_key
 
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 STREAM_ERROR_MESSAGE = "Something went wrong. Please try again."
+MODEL_UNAVAILABLE_MESSAGE = "The assistant is busy right now. Please try again in a moment."
 RATE_LIMIT_MESSAGE = "Too many requests. Please try again later."
 GLOBAL_RATE_LIMIT_KEY = "chat:global"
 
@@ -67,12 +68,20 @@ def health() -> dict:
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_rate_limit)])
 def chat(body: ChatRequest, request: Request) -> ChatResponse:
     chat: ChatUseCase = request.app.state.chat
-    return ChatResponse(reply=chat.reply(body.message))
+    try:
+        return ChatResponse(reply=chat.reply(body.message))
+    except ModelUnavailable:
+        logger.exception("model unavailable")
+        raise HTTPException(status_code=503, detail=MODEL_UNAVAILABLE_MESSAGE) from None
 
 
 @router.post("/chat/stream", dependencies=[Depends(enforce_rate_limit)])
 def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
-    """Server-Sent Events: `delta` text chunks, `tool` activity, then `done` (or `error`)."""
+    """Server-Sent Events: `delta` text chunks, `tool` activity, then `done` (or `error`).
+
+    An `error` event carries a `code` the client can act on: `model_unavailable` when the
+    model provider is busy (try again shortly), `server_error` for anything else.
+    """
     chat: ChatUseCase = request.app.state.chat
     return StreamingResponse(
         _sse_events(chat, body.message),
@@ -90,9 +99,13 @@ def _sse_events(chat: ChatUseCase, message: str) -> Iterator[str]:
                 yield _sse("tool", {"name": event.name})
             elif isinstance(event, ReplyFinished):
                 yield _sse("done", {"reply": event.text})
-    except Exception:  # headers are already sent, so report in-band without leaking details
+    # Headers are already sent, so failures are reported in-band, without leaking details.
+    except ModelUnavailable:
+        logger.exception("model unavailable")
+        yield _sse("error", {"code": "model_unavailable", "message": MODEL_UNAVAILABLE_MESSAGE})
+    except Exception:
         logger.exception("chat stream failed")
-        yield _sse("error", {"message": STREAM_ERROR_MESSAGE})
+        yield _sse("error", {"code": "server_error", "message": STREAM_ERROR_MESSAGE})
 
 
 def _sse(event: str, data: dict) -> str:

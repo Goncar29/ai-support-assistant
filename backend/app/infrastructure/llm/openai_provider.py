@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, Iterator, List, Sequence
 
+import openai
+
 from app.application.conversation import (
     STOP_END,
     STOP_MAX_TOKENS,
@@ -9,6 +11,7 @@ from app.application.conversation import (
     AssistantMessage,
     LLMEvent,
     Message,
+    ModelUnavailable,
     TextDelta,
     ToolCall,
     ToolResultsMessage,
@@ -16,10 +19,13 @@ from app.application.conversation import (
     TurnComplete,
     UserMessage,
 )
+from app.infrastructure.llm.errors import TRANSIENT_STATUS_CODES
 
 _INCOMPLETE_REASONS = {"max_output_tokens": STOP_MAX_TOKENS, "content_filter": STOP_REFUSAL}
 # A turn ends with exactly one of these; each carries the whole response.
 _TERMINAL_EVENTS = ("response.completed", "response.incomplete", "response.failed")
+# Codes of a failed response that mean the service, not the request, is the problem.
+_TRANSIENT_FAILURE_CODES = ("server_error", "rate_limit_exceeded")
 
 
 class OpenAIProvider:
@@ -32,6 +38,16 @@ class OpenAIProvider:
         self._max_output_tokens = max_output_tokens
 
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
+        try:
+            yield from self._stream(system, messages, tools)
+        except openai.APIConnectionError as exc:  # includes timeouts
+            raise ModelUnavailable(str(exc)) from exc
+        except openai.APIStatusError as exc:
+            if exc.status_code in TRANSIENT_STATUS_CODES:
+                raise ModelUnavailable(str(exc)) from exc
+            raise
+
+    def _stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         request: Dict[str, Any] = {
             "model": self._model,
             "instructions": system,
@@ -62,7 +78,10 @@ class OpenAIProvider:
         if final is None:
             raise RuntimeError("The OpenAI stream ended before the response finished.")
         if final.status == "failed":
-            raise RuntimeError("OpenAI response failed: %s" % (final.error.message if final.error else "unknown error"))
+            reason = "OpenAI response failed: %s" % (final.error.message if final.error else "unknown error")
+            if final.error and final.error.code in _TRANSIENT_FAILURE_CODES:
+                raise ModelUnavailable(reason)
+            raise RuntimeError(reason)
         yield TurnComplete(_from_wire(final))
 
 

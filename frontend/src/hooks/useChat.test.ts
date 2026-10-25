@@ -108,6 +108,19 @@ describe("useChat", () => {
     expect(result.current.error).toEqual({ kind: "server" });
   });
 
+  it("tells the visitor the assistant is busy when the model is unavailable", async () => {
+    replyWith({
+      type: "error",
+      code: "model_unavailable",
+      message: "The assistant is busy right now. Please try again in a moment.",
+    });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("hi"));
+
+    expect(result.current.error).toEqual({ kind: "busy" });
+  });
+
   it("reports an unexpected failure without leaking its message", async () => {
     streamChatMock.mockRejectedValue(new TypeError("Failed to fetch"));
     const { result } = renderHook(() => useChat());

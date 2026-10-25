@@ -43,7 +43,8 @@ export function useChat() {
             break;
           case "error":
             finished = true;
-            setError({ kind: "server" }); // the server's message is English-only; the UI has its own wording
+            // The server's message is English-only; the UI words the error from its code.
+            setError(event.code === "model_unavailable" ? { kind: "busy" } : { kind: "server" });
             break;
           // Unknown event types are ignored so the server can add new ones safely.
         }

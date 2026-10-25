@@ -61,6 +61,11 @@ describe("streamChat", () => {
     });
   });
 
+  it("reports a busy assistant when the server answers 503", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
+    await expect(streamChat("hola", () => {})).rejects.toMatchObject({ detail: { kind: "busy" } });
+  });
+
   it("reports a rate limit with its Retry-After seconds", async () => {
     vi.stubGlobal(
       "fetch",

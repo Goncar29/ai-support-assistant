@@ -1,5 +1,7 @@
 from types import SimpleNamespace as NS
 
+import httpx2
+import openai
 import pytest
 from openai.types.responses import (
     Response,
@@ -22,6 +24,7 @@ from app.application.conversation import (
     ToolResultsMessage,
     ToolSpec,
     TurnComplete,
+    ModelUnavailable,
     UserMessage,
 )
 from app.infrastructure.llm.openai_provider import OpenAIProvider
@@ -154,7 +157,7 @@ def test_unparseable_arguments_become_empty_so_the_tool_reports_the_error():
 
 
 def test_failed_response_raises_with_its_error():
-    final = Response.model_construct(output=[], status="failed", error=NS(code="server_error", message="boom"))
+    final = Response.model_construct(output=[], status="failed", error=NS(code="invalid_prompt", message="boom"))
     with pytest.raises(RuntimeError, match="boom"):
         run(OpenAIProvider(FakeClient([stream_of(final, terminal="response.failed")]), model="m"), [UserMessage("hi")])
 
@@ -193,3 +196,38 @@ def test_rebuilds_assistant_turns_from_other_providers():
         {"type": "function_call", "call_id": "c1", "name": "search_faq", "arguments": '{"query": "a"}'},
     ]
 
+
+class FailingClient:
+    def __init__(self, error):
+        self.error = error
+        self.responses = self
+
+    def create(self, **kwargs):
+        raise self.error
+
+
+def _status_error(cls, status):
+    return cls("upstream says no", response=httpx2.Response(status, request=httpx2.Request("POST", "https://api.test")), body=None)
+
+
+@pytest.mark.parametrize("error", [
+    _status_error(openai.RateLimitError, 429),
+    _status_error(openai.InternalServerError, 503),
+    openai.APITimeoutError(request=httpx2.Request("POST", "https://api.test")),
+    openai.APIConnectionError(request=httpx2.Request("POST", "https://api.test")),
+])
+def test_transient_failures_become_model_unavailable(error):
+    with pytest.raises(ModelUnavailable):
+        run(OpenAIProvider(FailingClient(error), model="m"), [UserMessage("hi")])
+
+
+def test_other_api_errors_pass_through():
+    error = _status_error(openai.AuthenticationError, 401)
+    with pytest.raises(openai.AuthenticationError):
+        run(OpenAIProvider(FailingClient(error), model="m"), [UserMessage("hi")])
+
+
+def test_failed_response_from_overload_is_model_unavailable():
+    final = Response.model_construct(output=[], status="failed", error=NS(code="server_error", message="busy"))
+    with pytest.raises(ModelUnavailable):
+        run(OpenAIProvider(FakeClient([stream_of(final, terminal="response.failed")]), model="m"), [UserMessage("hi")])

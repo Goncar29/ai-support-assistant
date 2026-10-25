@@ -72,3 +72,8 @@ class TurnComplete:
 
 
 LLMEvent = Union[TextDelta, TurnComplete]
+
+
+class ModelUnavailable(Exception):
+    """The model provider is temporarily unavailable: overloaded, rate limited, timed out or
+    unreachable. Adapters raise it after their own retries; trying again later can succeed."""

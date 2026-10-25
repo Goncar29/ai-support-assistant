@@ -2,7 +2,8 @@ export type ChatStreamEvent =
   | { type: "delta"; text: string }
   | { type: "tool"; name: string }
   | { type: "done"; reply: string }
-  | { type: "error"; message: string };
+  // `code` says what failed: "model_unavailable" (the AI provider is busy) or "server_error".
+  | { type: "error"; message: string; code?: string };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -29,6 +30,7 @@ export type ChatError =
   | { kind: "request_failed"; status: number }
   | { kind: "incomplete" }
   | { kind: "server" }
+  | { kind: "busy" }
   | { kind: "unexpected" };
 
 export class ChatRequestError extends Error {
@@ -61,6 +63,8 @@ export async function streamChat(
   if (res.status === 429) {
     throw new ChatRequestError({ kind: "rate_limit", retryAfterSeconds: retryAfterSeconds(res.headers.get("Retry-After")) });
   }
+  // 503 means the AI provider is busy (or the API host is); either way, trying again shortly helps.
+  if (res.status === 503) throw new ChatRequestError({ kind: "busy" });
   if (!res.ok || !res.body) throw new ChatRequestError({ kind: "request_failed", status: res.status });
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
