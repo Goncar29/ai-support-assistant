@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChatRequestError, streamChat, type ChatError, type ChatStreamEvent } from "../api/chatStream";
+import { ChatRequestError, streamChat, type ChatError, type ChatStreamEvent, type HistoryTurn } from "../api/chatStream";
 
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
+
+/** How many earlier messages go with each new one; the API caps the rest by length. */
+export const MAX_HISTORY_MESSAGES = 10;
+
+function toHistory(messages: ChatMessage[]): HistoryTurn[] {
+  return messages
+    .filter((m) => m.text)
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.text }));
+}
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -15,6 +25,7 @@ export function useChat() {
   const send = useCallback(
     async (text: string) => {
       if (!text || streaming) return;
+      const history = toHistory(messages); // what the visitor saw before this message
       const replyId = crypto.randomUUID();
       setMessages((m) => [
         ...m,
@@ -53,7 +64,7 @@ export function useChat() {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        await streamChat(text, onEvent, controller.signal);
+        await streamChat(text, onEvent, controller.signal, history);
         if (!finished) setError({ kind: "incomplete" });
       } catch (err) {
         if (!controller.signal.aborted) setError(err instanceof ChatRequestError ? err.detail : { kind: "unexpected" });
@@ -64,7 +75,7 @@ export function useChat() {
         setStreaming(false);
       }
     },
-    [streaming],
+    [streaming, messages],
   );
 
   return { messages, streaming, activity, error, send };

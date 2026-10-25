@@ -45,7 +45,7 @@ describe("streamChat", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/chat/stream",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ message: "hola" }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ message: "hola", history: [] }) }),
     );
     expect(events).toEqual([
       { type: "delta", text: "Hello" },
@@ -59,6 +59,19 @@ describe("streamChat", () => {
       name: "ChatRequestError",
       detail: { kind: "request_failed", status: 422 },
     });
+  });
+
+  it("sends the earlier conversation with the message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(streamOf(['event: done\ndata: {"reply": "ok"}\n\n'])));
+    vi.stubGlobal("fetch", fetchMock);
+    const history = [
+      { role: "user" as const, content: "I want a refund" },
+      { role: "assistant" as const, content: "Refunds take 5 days." },
+    ];
+
+    await streamChat("And then?", () => {}, undefined, history);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ message: "And then?", history });
   });
 
   it("reports a busy assistant when the server answers 503", async () => {

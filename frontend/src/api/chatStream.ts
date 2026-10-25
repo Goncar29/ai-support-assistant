@@ -48,16 +48,20 @@ function retryAfterSeconds(header: string | null): number | null {
   return header && Number.isInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
-/** POSTs the message and invokes `onEvent` for every server-sent event as it arrives. */
+/** One earlier turn of the conversation, as the API expects it. */
+export type HistoryTurn = { role: "user" | "assistant"; content: string };
+
+/** POSTs the message, with the earlier conversation, and invokes `onEvent` for every server-sent event as it arrives. */
 export async function streamChat(
   message: string,
   onEvent: (event: ChatStreamEvent) => void,
   signal?: AbortSignal,
+  history: HistoryTurn[] = [],
 ): Promise<void> {
   const res = await fetch(`${API_URL}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, history }),
     signal,
   });
   if (res.status === 429) {

@@ -34,10 +34,13 @@ AgentEvent = Union[TextDelta, ToolStarted, ReplyFinished]
 
 @runtime_checkable
 class ChatUseCase(Protocol):
-    def run(self, message: str) -> Iterator[AgentEvent]:
-        """Answer a message: yield TextDelta and ToolStarted as they happen, then exactly one ReplyFinished."""
+    def run(self, message: str, history: Sequence[Message] = ()) -> Iterator[AgentEvent]:
+        """Answer a message: yield TextDelta and ToolStarted as they happen, then exactly one ReplyFinished.
 
-    def reply(self, message: str) -> str:
+        `history` is the earlier conversation, oldest first: UserMessage and AssistantMessage turns.
+        """
+
+    def reply(self, message: str, history: Sequence[Message] = ()) -> str:
         """Answer a message and return only the final text."""
 
 

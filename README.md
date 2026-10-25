@@ -94,7 +94,7 @@ Vercel reads the Python version from `backend/.python-version` and installs only
 | Endpoint | Description |
 |---|---|
 | `GET /health` | Liveness check: `{"status": "ok"}` |
-| `POST /chat` | `{"message": "..."}` → `{"reply": "..."}` once the agent finishes |
+| `POST /chat` | `{"message": "...", "history": [{"role": "user" \| "assistant", "content": "..."}]}` → `{"reply": "..."}` once the agent finishes. `history` is optional: the earlier conversation, oldest first, at most 20 messages of up to 4000 characters each |
 | `POST /chat/stream` | Same input, answered as Server-Sent Events: `delta` (`{"text"}` chunks as they are generated), `tool` (`{"name"}` when the agent runs a tool), then `done` (`{"reply"}`, the authoritative final answer) or `error` (`{"code", "message"}`; `code` is `model_unavailable` when the AI provider is busy, `server_error` otherwise) |
 
 The frontend uses `/chat/stream`, so text appears while the model is still writing.
