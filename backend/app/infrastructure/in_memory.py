@@ -2,7 +2,7 @@
 import threading
 import time
 import unicodedata
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Mapping, Optional, Sequence
 
 from app.domain.rate_limit import RateLimitDecision, current_window, decide
 from app.domain.ticket import Ticket
@@ -17,6 +17,18 @@ DEFAULT_FAQ: Dict[str, str] = {
     "contrasena": "Usa 'Olvidé mi contraseña' en la página de inicio de sesión para restablecerla.",
 }
 
+# Other words people (and models) use for each topic, written without accents. Words that also
+# describe a damaged order ("arrive", "deliver", "llegar") are left out on purpose: that needs a
+# ticket, not the shipping times.
+DEFAULT_FAQ_SYNONYMS: Dict[str, Sequence[str]] = {
+    "refund": ("money back", "reimburse", "repay"),
+    "shipping": ("delivery time", "shipment", "tracking"),
+    "password": ("log in", "login", "sign in", "locked out"),
+    "reembolso": ("devolucion", "devolver", "reintegro", "mi dinero"),
+    "envio": ("entrega", "despacho", "seguimiento"),
+    "contrasena": ("clave", "iniciar sesion", "acceder a mi cuenta"),
+}
+
 
 def _fold(text: str) -> str:
     """Lowercase and strip accents, so "Envío" and "envio" match the same topic."""
@@ -25,12 +37,15 @@ def _fold(text: str) -> str:
 
 
 class InMemoryFaqRepository:
-    def __init__(self, entries: Dict[str, str]):
+    """Finds an answer when its topic, or one of the topic's synonyms, appears in the query."""
+
+    def __init__(self, entries: Dict[str, str], synonyms: Mapping[str, Sequence[str]] = DEFAULT_FAQ_SYNONYMS):
         self._entries = dict(entries)
+        self._keywords = {topic: [_fold(k) for k in (topic, *synonyms.get(topic, ()))] for topic in entries}
 
     def search(self, query: str) -> List[str]:
         q = _fold(query)
-        return [answer for topic, answer in self._entries.items() if _fold(topic) in q]
+        return [answer for topic, answer in self._entries.items() if any(k in q for k in self._keywords[topic])]
 
 
 class InMemoryTicketRepository:

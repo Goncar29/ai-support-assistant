@@ -69,7 +69,7 @@ A **port** is an interface on the edge of the application; an **adapter** is the
 | `LLMProvider` | `LLM_PROVIDER=openai` → `OpenAIProvider`; `LLM_PROVIDER=gemini` → `GeminiProvider`; `LLM_PROVIDER=anthropic`, or `LLM_PROVIDER` unset and `ANTHROPIC_API_KEY` set → `AnthropicProvider` | `DemoProvider` (demo mode: a scripted model that searches the FAQ and opens a ticket only when asked) |
 | `TicketRepository` | `DATABASE_URL` is set → `PostgresTicketRepository` | `InMemoryTicketRepository` (lost on restart) |
 | `TicketNotifier` | `N8N_WEBHOOK_URL` is set → `N8nNotifier` | `NullNotifier` |
-| `FaqRepository` | always `InMemoryFaqRepository` with the built-in FAQ | — |
+| `FaqRepository` | always `InMemoryFaqRepository` with the built-in FAQ: an answer matches when its topic or one of its synonyms (`DEFAULT_FAQ_SYNONYMS`) appears in the query, ignoring case and accents | — |
 
 ```mermaid
 flowchart LR
