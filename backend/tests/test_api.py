@@ -7,9 +7,11 @@ from fastapi.testclient import TestClient
 from app.application.conversation import TextDelta
 from app.application.ports import ReplyFinished, ToolStarted
 from app.config import Settings
-from app.main import build_notifier, build_ticket_repository, create_app
+from app.main import LLM_TIMEOUT_SECONDS, build_llm, build_notifier, build_ticket_repository, create_app
 from app.infrastructure.in_memory import InMemoryTicketRepository
-from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY_ES
+from app.infrastructure.llm.anthropic_provider import AnthropicProvider
+from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY_ES, DemoProvider
+from app.infrastructure.llm.openai_provider import OpenAIProvider
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 from app.infrastructure.postgres import PostgresTicketRepository
 
@@ -108,6 +110,50 @@ def test_settings_from_env_parses_values():
 def test_settings_reject_unknown_effort():
     with pytest.raises(ValueError, match="ANTHROPIC_EFFORT"):
         Settings.from_env({"ANTHROPIC_EFFORT": "lowww"})
+
+
+def test_settings_read_openai_values():
+    settings = Settings.from_env({"LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-test", "OPENAI_MODEL": "gpt-test"})
+    assert (settings.llm_provider, settings.openai_api_key, settings.openai_model) == ("openai", "sk-test", "gpt-test")
+    defaults = Settings.from_env({})
+    assert (defaults.llm_provider, defaults.openai_model) == (None, "gpt-6-luna")
+
+
+@pytest.mark.parametrize("env, provider", [
+    ({}, "demo"),
+    ({"ANTHROPIC_API_KEY": "k"}, "anthropic"),  # unchanged: a Claude key alone still enables Claude
+    ({"LLM_PROVIDER": "demo", "ANTHROPIC_API_KEY": "k"}, "demo"),
+    ({"LLM_PROVIDER": " OpenAI ", "OPENAI_API_KEY": "k"}, "openai"),
+])
+def test_settings_resolve_the_llm_provider(env, provider):
+    assert Settings.from_env(env).provider == provider
+
+
+def test_settings_reject_an_unknown_provider():
+    with pytest.raises(ValueError, match="LLM_PROVIDER must be one of anthropic, openai, demo"):
+        Settings.from_env({"LLM_PROVIDER": "mistral"})
+
+
+@pytest.mark.parametrize("provider, key", [("openai", "OPENAI_API_KEY"), ("anthropic", "ANTHROPIC_API_KEY")])
+def test_settings_require_the_chosen_providers_key(provider, key):
+    with pytest.raises(ValueError, match="LLM_PROVIDER=%s needs %s" % (provider, key)):
+        Settings.from_env({"LLM_PROVIDER": provider})
+
+
+def test_openai_client_gives_up_instead_of_hanging():
+    # OpenAI's default timeout is 10 minutes; a stalled call must end in an error event instead.
+    openai_llm = build_llm(Settings(llm_provider="openai", openai_api_key="k"))
+    assert openai_llm._client.timeout == LLM_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("settings, adapter", [
+    (Settings(), DemoProvider),
+    (Settings(anthropic_api_key="k"), AnthropicProvider),
+    (Settings(llm_provider="openai", openai_api_key="k"), OpenAIProvider),
+])
+def test_build_llm_plugs_the_configured_adapter(settings, adapter):
+    # Building a client opens no connection, so this needs no network and spends nothing.
+    assert isinstance(build_llm(settings), adapter)
 
 
 def test_notifier_is_n8n_only_when_url_is_configured():

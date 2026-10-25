@@ -17,15 +17,27 @@ from app.infrastructure.llm.demo_provider import DemoProvider
 from app.infrastructure.notifications import N8nNotifier, NullNotifier
 
 
+# A stalled provider call must end in an error event, not a silent chat; OpenAI's default is 10 minutes.
+LLM_TIMEOUT_SECONDS = 30
+
+
 def build_llm(settings: Settings) -> LLMProvider:
-    if not settings.anthropic_api_key:
-        return DemoProvider()  # free: a scripted model drives the real tools
-    import anthropic
+    # Each SDK is imported only when its provider is chosen, so the others never load.
+    if settings.provider == "openai":
+        import openai
 
-    from app.infrastructure.llm.anthropic_provider import AnthropicProvider
+        from app.infrastructure.llm.openai_provider import OpenAIProvider
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicProvider(client, model=settings.anthropic_model, effort=settings.anthropic_effort)
+        client = openai.OpenAI(api_key=settings.openai_api_key, timeout=LLM_TIMEOUT_SECONDS)
+        return OpenAIProvider(client, model=settings.openai_model)
+    if settings.provider == "anthropic":
+        import anthropic
+
+        from app.infrastructure.llm.anthropic_provider import AnthropicProvider
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        return AnthropicProvider(client, model=settings.anthropic_model, effort=settings.anthropic_effort)
+    return DemoProvider()  # free: a scripted model drives the real tools
 
 
 def build_notifier(settings: Settings) -> TicketNotifier:
