@@ -121,6 +121,31 @@ describe("useChat", () => {
     expect(result.current.error).toEqual({ kind: "busy" });
   });
 
+  it("sends the earlier exchange as history with the next message", async () => {
+    replyWith({ type: "done", reply: "Refunds take 5 days." });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("I want a refund"));
+    await act(() => result.current.send("And then?"));
+
+    expect(streamChatMock.mock.calls[0][3]).toEqual([]);
+    expect(streamChatMock.mock.calls[1][3]).toEqual([
+      { role: "user", content: "I want a refund" },
+      { role: "assistant", content: "Refunds take 5 days." },
+    ]);
+  });
+
+  it("sends at most the last 10 messages as history", async () => {
+    replyWith({ type: "done", reply: "ok" });
+    const { result } = renderHook(() => useChat());
+
+    for (let i = 1; i <= 7; i++) await act(() => result.current.send(`question ${i}`));
+
+    const history = streamChatMock.mock.calls[6][3];
+    expect(history).toHaveLength(10);
+    expect(history?.[0]).toEqual({ role: "user", content: "question 2" });
+  });
+
   it("reports an unexpected failure without leaking its message", async () => {
     streamChatMock.mockRejectedValue(new TypeError("Failed to fetch"));
     const { result } = renderHook(() => useChat());

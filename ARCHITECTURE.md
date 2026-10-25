@@ -125,7 +125,7 @@ sequenceDiagram
     participant D as TicketRepository (Postgres)
     participant N as TicketNotifier (n8n)
 
-    B->>R: POST /chat/stream {"message": "..."}
+    B->>R: POST /chat/stream {"message": "...", "history": [...]}
     R->>A: chat.run(message)
     A->>L: stream(system prompt, history, tool specs)
     L-->>A: TurnComplete(stop_reason=tool_use, search_faq)
@@ -195,6 +195,8 @@ Why SSE and not WebSockets: the conversation is one request and one streamed ans
 On the frontend, `src/api/chatStream.ts` reads the stream and parses frames (including frames split across network chunks), and `src/hooks/useChat.ts` turns events into UI state: it appends deltas to the assistant bubble, shows tool activity, replaces the text with `done`, and reports a stream that closes without `done` or `error` as a failure. `App.tsx` only renders.
 
 `POST /chat` still exists for clients that want a single JSON reply: it runs the same loop and returns `{"reply"}`.
+
+**Conversation memory.** The server keeps no conversation state, which suits serverless functions: the frontend sends the last 10 messages as `history` with each new one (`user` and `assistant` turns only, so a client cannot inject system or tool turns). The agent keeps the most recent turns that fit in `MAX_HISTORY_CHARS` (8000 characters), because they are resent on every model step and count toward the cost. It also shapes them so every provider accepts them: the conversation opens with a user turn, and a user turn left without a reply joins the next one. Closing or reloading the page starts a new conversation.
 
 ## Persistence
 

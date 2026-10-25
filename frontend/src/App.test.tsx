@@ -45,7 +45,12 @@ describe("App", () => {
       fireEvent.click(screen.getByRole("button", { name: "How long does shipping take?" }));
     });
 
-    expect(streamChatMock).toHaveBeenCalledWith("How long does shipping take?", expect.any(Function), expect.any(AbortSignal));
+    expect(streamChatMock).toHaveBeenCalledWith(
+      "How long does shipping take?",
+      expect.any(Function),
+      expect.any(AbortSignal),
+      [],
+    );
     expect(screen.getByText(answer)).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "How can I help you today?" })).toBeNull();
   });

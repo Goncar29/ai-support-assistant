@@ -9,7 +9,7 @@ from app.application.conversation import (
     UserMessage,
 )
 from app.application.ports import ChatUseCase, ReplyFinished, ToolStarted
-from app.application.support_agent import GIVE_UP_REPLY, REFUSAL_REPLY, SupportAgent
+from app.application.support_agent import GIVE_UP_REPLY, MAX_HISTORY_CHARS, REFUSAL_REPLY, SupportAgent
 from app.application.support_tools import TICKET_LIMIT_MESSAGE, SupportTools
 from app.infrastructure.in_memory import DEFAULT_FAQ, InMemoryFaqRepository, InMemoryTicketRepository
 from app.infrastructure.notifications import NullNotifier
@@ -143,3 +143,34 @@ def test_the_ticket_budget_is_per_request():
     agent.reply("second request")
 
     assert len(tickets.list()) == 2
+
+
+def test_history_goes_before_the_new_message():
+    agent, llm, _ = make_agent([AssistantMessage(text="About 5 days.")])
+    history = [UserMessage("I want a refund"), AssistantMessage("Refunds take 5 business days.")]
+
+    agent.reply("And when does it start?", history)
+
+    assert llm.calls[0] == [*history, UserMessage("And when does it start?")]
+
+
+def test_history_keeps_only_the_most_recent_messages_within_the_budget():
+    agent, llm, _ = make_agent([AssistantMessage(text="ok")])
+    old = [UserMessage("u%d " % i + "x" * 1000) if i % 2 == 0 else AssistantMessage("a%d " % i + "x" * 1000) for i in range(20)]
+
+    agent.reply("latest", old)
+
+    context = llm.calls[0][:-1]
+    assert sum(len(m.text) for m in context) <= MAX_HISTORY_CHARS
+    assert context[-1] == old[-1]  # the newest history survives
+    assert isinstance(context[0], UserMessage)  # and the context still opens with the user
+
+
+def test_history_is_cleaned_for_providers_that_need_alternating_turns():
+    agent, llm, _ = make_agent([AssistantMessage(text="ok")])
+    # A leading assistant turn is dropped; a user turn left without a reply joins the next one.
+    history = [AssistantMessage("Welcome!"), UserMessage("first"), AssistantMessage("reply"), UserMessage("unanswered")]
+
+    agent.reply("again", history)
+
+    assert llm.calls[0] == [UserMessage("first"), AssistantMessage("reply"), UserMessage("unanswered\n\nagain")]

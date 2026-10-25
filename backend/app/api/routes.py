@@ -1,12 +1,12 @@
 import json
 import logging
-from typing import Iterator
+from typing import Iterator, List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.application.conversation import ModelUnavailable, TextDelta
+from app.application.conversation import AssistantMessage, Message, ModelUnavailable, TextDelta, UserMessage
 from app.application.ports import ChatUseCase, RateLimiter, ReplyFinished, ToolStarted
 from app.domain.rate_limit import client_key
 
@@ -19,8 +19,22 @@ RATE_LIMIT_MESSAGE = "Too many requests. Please try again later."
 GLOBAL_RATE_LIMIT_KEY = "chat:global"
 
 
+MAX_HISTORY_MESSAGES = 20
+
+
+class HistoryMessage(BaseModel):
+    # Only the visitor and the assistant: a client must not be able to send system or tool turns.
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    # The earlier conversation, oldest first. The agent keeps only what fits in its budget.
+    history: List[HistoryMessage] = Field(default_factory=list, max_length=MAX_HISTORY_MESSAGES)
+
+    def conversation(self) -> List[Message]:
+        return [UserMessage(m.content) if m.role == "user" else AssistantMessage(m.content) for m in self.history]
 
 
 class ChatResponse(BaseModel):
@@ -69,7 +83,7 @@ def health() -> dict:
 def chat(body: ChatRequest, request: Request) -> ChatResponse:
     chat: ChatUseCase = request.app.state.chat
     try:
-        return ChatResponse(reply=chat.reply(body.message))
+        return ChatResponse(reply=chat.reply(body.message, body.conversation()))
     except ModelUnavailable:
         logger.exception("model unavailable")
         raise HTTPException(status_code=503, detail=MODEL_UNAVAILABLE_MESSAGE) from None
@@ -84,15 +98,15 @@ def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     """
     chat: ChatUseCase = request.app.state.chat
     return StreamingResponse(
-        _sse_events(chat, body.message),
+        _sse_events(chat, body.message, body.conversation()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _sse_events(chat: ChatUseCase, message: str) -> Iterator[str]:
+def _sse_events(chat: ChatUseCase, message: str, history: List[Message]) -> Iterator[str]:
     try:
-        for event in chat.run(message):
+        for event in chat.run(message, history):
             if isinstance(event, TextDelta):
                 yield _sse("delta", {"text": event.text})
             elif isinstance(event, ToolStarted):
