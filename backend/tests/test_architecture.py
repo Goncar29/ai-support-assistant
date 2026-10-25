@@ -10,8 +10,9 @@ import pytest
 
 APP = Path(__file__).resolve().parent.parent / "app"
 
-CORE_FORBIDDEN = ("fastapi", "starlette", "anthropic", "psycopg", "dotenv", "os", "app.infrastructure", "app.api", "app.main", "app.config")
-API_FORBIDDEN = ("app.infrastructure", "app.application.support_agent", "app.application.support_tools", "anthropic", "psycopg")
+LLM_SDKS = ("anthropic", "openai")
+CORE_FORBIDDEN = ("fastapi", "starlette", *LLM_SDKS, "psycopg", "dotenv", "os", "app.infrastructure", "app.api", "app.main", "app.config")
+API_FORBIDDEN = ("app.infrastructure", "app.application.support_agent", "app.application.support_tools", *LLM_SDKS, "psycopg")
 
 
 def imported_modules(path: Path):

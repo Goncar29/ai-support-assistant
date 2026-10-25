@@ -16,7 +16,7 @@ How it works (hexagonal layers, request flow, streaming, persistence): see [ARCH
 |---|---|
 | Frontend | React + TypeScript (Vite), Vitest + Testing Library |
 | Backend | FastAPI, Server-Sent Events, hexagonal architecture (ports and adapters) |
-| LLM | Claude Haiku 5.5 via the Anthropic SDK, behind a provider-neutral port |
+| LLM | Claude Haiku 5.5 or OpenAI, behind a provider-neutral port (`LLM_PROVIDER`) |
 | Database | Postgres on Neon (psycopg 3); in-memory fallback |
 | Automation | n8n webhook on new tickets (optional) |
 | Hosting | Vercel (frontend + FastAPI function), Neon free plan |
@@ -50,9 +50,12 @@ Backend (all optional):
 
 | Variable | Purpose | Default |
 |---|---|---|
+| `LLM_PROVIDER` | `anthropic`, `openai` or `demo`; the app refuses to start if the chosen provider's key is missing | unset (Claude if `ANTHROPIC_API_KEY` is set, else demo mode) |
 | `ANTHROPIC_API_KEY` | Enables the Claude agent; without it a scripted demo model drives the tools | unset (demo mode) |
 | `ANTHROPIC_MODEL` | Claude model id | `claude-haiku-5-5` |
 | `ANTHROPIC_EFFORT` | Reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`); lower is faster | `low` |
+| `OPENAI_API_KEY` | OpenAI key, used with `LLM_PROVIDER=openai` | unset |
+| `OPENAI_MODEL` | OpenAI model id | `gpt-6-luna` |
 | `DATABASE_URL` | Postgres connection string (use Neon's pooled `-pooler` host); without it tickets live in memory and are lost on restart | unset (in-memory) |
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |
@@ -72,7 +75,7 @@ Two Vercel projects (Hobby plan) linked to this repository, plus a Neon Postgres
 
 | Vercel project | Root directory | Framework | Environment variables |
 |---|---|---|---|
-| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `DATABASE_URL` and `ANTHROPIC_API_KEY` as **Sensitive** |
+| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `DATABASE_URL` and the provider's API key as **Sensitive** |
 | `ai-support-assistant` | `frontend/` | Vite | `VITE_API_URL` = API URL |
 
 Steps for a fresh setup:
