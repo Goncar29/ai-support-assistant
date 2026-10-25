@@ -57,7 +57,7 @@ Backend (all optional):
 | `OPENAI_API_KEY` | OpenAI key, used with `LLM_PROVIDER=openai` | unset |
 | `OPENAI_MODEL` | OpenAI model id | `gpt-6-luna` |
 | `GEMINI_API_KEY` | Gemini key, used with `LLM_PROVIDER=gemini` | unset |
-| `GEMINI_MODEL` | Gemini model id | `gemini-3.8-flash` |
+| `GEMINI_MODEL` | Gemini model id | `gemini-3.5-flash-lite` |
 | `DATABASE_URL` | Postgres connection string (use Neon's pooled `-pooler` host); without it tickets live in memory and are lost on restart | unset (in-memory) |
 | `N8N_WEBHOOK_URL` | Webhook notified when a ticket is created | unset (no notification) |
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API | `http://localhost:5173` |

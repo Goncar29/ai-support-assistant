@@ -8,7 +8,8 @@ DEFAULT_EFFORT = "low"  # chat replies favor latency over deep reasoning
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 LLM_PROVIDERS = ("anthropic", "openai", "gemini", "demo")
 DEFAULT_OPENAI_MODEL = "gpt-6-luna"  # OpenAI's lowest-cost model with function calling
-DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+# gemini-3.8-flash answered 503 "high demand" for hours; Flash-Lite is the fastest and cheapest Flash.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 DEFAULT_RATE_LIMIT_REQUESTS = 10  # chat requests per client...
 DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60  # ...per minute

@@ -160,7 +160,7 @@ def test_settings_read_openai_and_gemini_values():
     assert (settings.llm_provider, settings.openai_api_key, settings.openai_model) == ("openai", "sk-test", "gpt-test")
     assert (settings.gemini_api_key, settings.gemini_model) == ("g-test", "gemini-test")
     defaults = Settings.from_env({})
-    assert (defaults.llm_provider, defaults.openai_model, defaults.gemini_model) == (None, "gpt-6-luna", "gemini-3.8-flash")
+    assert (defaults.llm_provider, defaults.openai_model, defaults.gemini_model) == (None, "gpt-6-luna", "gemini-3.5-flash-lite")
 
 
 @pytest.mark.parametrize("env, provider", [
@@ -196,6 +196,8 @@ def test_new_provider_clients_give_up_instead_of_hanging():
 def test_provider_clients_retry_transient_failures_twice():
     retry = build_llm(Settings(llm_provider="gemini", gemini_api_key="k"))._client._api_client._http_options.retry_options
     assert retry.attempts == LLM_MAX_RETRIES + 1  # google-genai counts the first call
+    # A free-tier quota 429 asks to wait about a minute: retrying at once only spends more quota.
+    assert 503 in retry.http_status_codes and 429 not in retry.http_status_codes
     assert build_llm(Settings(llm_provider="openai", openai_api_key="k"))._client.max_retries == LLM_MAX_RETRIES
     assert build_llm(Settings(anthropic_api_key="k"))._client.max_retries == LLM_MAX_RETRIES
 

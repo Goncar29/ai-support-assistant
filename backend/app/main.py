@@ -39,8 +39,14 @@ def build_llm(settings: Settings) -> LLMProvider:
 
         from app.infrastructure.llm.gemini_provider import GeminiProvider
 
-        # google-genai counts the first call as an attempt and retries 408, 429 and 5xx by default.
-        retry = {"attempts": LLM_MAX_RETRIES + 1, "initial_delay": 1.0, "max_delay": 4.0}
+        # google-genai counts the first call as an attempt. 429 is left out on purpose: a quota 429
+        # asks to wait about a minute, so retrying a second later only spends more of the quota.
+        retry = {
+            "attempts": LLM_MAX_RETRIES + 1,
+            "initial_delay": 1.0,
+            "max_delay": 4.0,
+            "http_status_codes": [408, 500, 502, 503, 504],
+        }
         http_options = {"timeout": LLM_TIMEOUT_SECONDS * 1000, "retry_options": retry}  # timeout in milliseconds
         client = genai.Client(api_key=settings.gemini_api_key, http_options=http_options)
         return GeminiProvider(client, model=settings.gemini_model)
