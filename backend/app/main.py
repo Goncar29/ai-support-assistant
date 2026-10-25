@@ -20,6 +20,9 @@ from app.infrastructure.notifications import N8nNotifier, NullNotifier
 # A stalled provider call must end in an error event, not a silent chat. google-genai has no
 # timeout by default and waited forever on an overloaded model; OpenAI's default is 10 minutes.
 LLM_TIMEOUT_SECONDS = 30
+# Overload and rate-limit errors are often gone a second later. Two retries with a short backoff
+# hide most of them; the adapters turn what is left into ModelUnavailable.
+LLM_MAX_RETRIES = 2
 
 
 def build_llm(settings: Settings) -> LLMProvider:
@@ -29,14 +32,16 @@ def build_llm(settings: Settings) -> LLMProvider:
 
         from app.infrastructure.llm.openai_provider import OpenAIProvider
 
-        client = openai.OpenAI(api_key=settings.openai_api_key, timeout=LLM_TIMEOUT_SECONDS)
+        client = openai.OpenAI(api_key=settings.openai_api_key, timeout=LLM_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         return OpenAIProvider(client, model=settings.openai_model)
     if settings.provider == "gemini":
         from google import genai
 
         from app.infrastructure.llm.gemini_provider import GeminiProvider
 
-        http_options = {"timeout": LLM_TIMEOUT_SECONDS * 1000}  # milliseconds
+        # google-genai counts the first call as an attempt and retries 408, 429 and 5xx by default.
+        retry = {"attempts": LLM_MAX_RETRIES + 1, "initial_delay": 1.0, "max_delay": 4.0}
+        http_options = {"timeout": LLM_TIMEOUT_SECONDS * 1000, "retry_options": retry}  # timeout in milliseconds
         client = genai.Client(api_key=settings.gemini_api_key, http_options=http_options)
         return GeminiProvider(client, model=settings.gemini_model)
     if settings.provider == "anthropic":
@@ -44,7 +49,7 @@ def build_llm(settings: Settings) -> LLMProvider:
 
         from app.infrastructure.llm.anthropic_provider import AnthropicProvider
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=LLM_MAX_RETRIES)
         return AnthropicProvider(client, model=settings.anthropic_model, effort=settings.anthropic_effort)
     return DemoProvider()  # free: a scripted model drives the real tools
 

@@ -1,5 +1,6 @@
+import httpx
 import pytest
-from google.genai import types
+from google.genai import errors, types
 
 from app.application.conversation import (
     STOP_END,
@@ -13,6 +14,7 @@ from app.application.conversation import (
     ToolResultsMessage,
     ToolSpec,
     TurnComplete,
+    ModelUnavailable,
     UserMessage,
 )
 from app.infrastructure.llm.gemini_provider import GeminiProvider
@@ -180,3 +182,41 @@ def test_rebuilds_assistant_turns_from_other_providers():
         {"function_call": {"id": "c1", "name": "search_faq", "args": {"query": "a"}}},
     ]}
 
+
+class FailingClient:
+    def __init__(self, error):
+        self.error = error
+        self.models = self
+
+    def generate_content_stream(self, **kwargs):
+        raise self.error
+
+
+@pytest.mark.parametrize("error", [
+    errors.ServerError(503, {"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}}),
+    errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}}),
+    httpx.ReadTimeout("timed out"),
+    httpx.ConnectError("unreachable"),
+])
+def test_transient_failures_become_model_unavailable(error):
+    with pytest.raises(ModelUnavailable):
+        run(GeminiProvider(FailingClient(error), model="m"), [UserMessage("hi")])
+
+
+def test_other_api_errors_pass_through():
+    error = errors.ClientError(400, {"error": {"code": 400, "message": "bad request", "status": "INVALID_ARGUMENT"}})
+    with pytest.raises(errors.ClientError):
+        run(GeminiProvider(FailingClient(error), model="m"), [UserMessage("hi")])
+
+
+def test_a_failure_mid_stream_is_translated_too():
+    def chunks():
+        yield chunk(text("Partial"))
+        raise httpx.ReadTimeout("timed out")
+
+    client = FakeClient([chunks()])
+    events = []
+    with pytest.raises(ModelUnavailable):
+        for event in GeminiProvider(client, model="m").stream("sys", [UserMessage("hi")], []):
+            events.append(event)
+    assert events == [TextDelta("Partial")]

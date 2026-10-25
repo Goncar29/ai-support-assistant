@@ -4,10 +4,10 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from app.application.conversation import TextDelta
+from app.application.conversation import ModelUnavailable, TextDelta
 from app.application.ports import ReplyFinished, ToolStarted
 from app.config import Settings
-from app.main import LLM_TIMEOUT_SECONDS, build_llm, build_notifier, build_ticket_repository, create_app
+from app.main import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS, build_llm, build_notifier, build_ticket_repository, create_app
 from app.infrastructure.in_memory import InMemoryTicketRepository
 from app.infrastructure.llm.anthropic_provider import AnthropicProvider
 from app.infrastructure.llm.demo_provider import NO_FAQ_MATCH_REPLY_ES, DemoProvider
@@ -75,7 +75,43 @@ def test_chat_stream_turns_failures_into_an_error_event():
 
     events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
 
-    assert events == [("delta", {"text": "partial"}), ("error", {"message": "Something went wrong. Please try again."})]
+    assert events == [
+        ("delta", {"text": "partial"}),
+        ("error", {"code": "server_error", "message": "Something went wrong. Please try again."}),
+    ]
+
+
+def failing_chat(error):
+    def run(message):
+        yield TextDelta("partial")
+        raise error
+
+    def reply(message):
+        raise error
+
+    return SimpleNamespace(run=run, reply=reply)
+
+
+def test_chat_stream_tells_the_client_when_the_model_is_busy():
+    app = create_app(Settings())
+    app.state.chat = failing_chat(ModelUnavailable("503 from upstream"))
+
+    events = parse_sse(TestClient(app).post("/chat/stream", json={"message": "x"}).text)
+
+    assert events[-1] == (
+        "error",
+        {"code": "model_unavailable", "message": "The assistant is busy right now. Please try again in a moment."},
+    )
+
+
+def test_chat_answers_503_when_the_model_is_busy():
+    app = create_app(Settings())
+    app.state.chat = failing_chat(ModelUnavailable("503 from upstream"))
+
+    res = TestClient(app).post("/chat", json={"message": "x"})
+
+    assert res.status_code == 503
+    assert res.json() == {"detail": "The assistant is busy right now. Please try again in a moment."}
 
 
 def test_chat_stream_rejects_empty_message():
@@ -155,6 +191,13 @@ def test_new_provider_clients_give_up_instead_of_hanging():
     assert gemini._client._api_client._http_options.timeout == LLM_TIMEOUT_SECONDS * 1000  # milliseconds
     openai_llm = build_llm(Settings(llm_provider="openai", openai_api_key="k"))
     assert openai_llm._client.timeout == LLM_TIMEOUT_SECONDS
+
+
+def test_provider_clients_retry_transient_failures_twice():
+    retry = build_llm(Settings(llm_provider="gemini", gemini_api_key="k"))._client._api_client._http_options.retry_options
+    assert retry.attempts == LLM_MAX_RETRIES + 1  # google-genai counts the first call
+    assert build_llm(Settings(llm_provider="openai", openai_api_key="k"))._client.max_retries == LLM_MAX_RETRIES
+    assert build_llm(Settings(anthropic_api_key="k"))._client.max_retries == LLM_MAX_RETRIES
 
 
 @pytest.mark.parametrize("settings, adapter", [

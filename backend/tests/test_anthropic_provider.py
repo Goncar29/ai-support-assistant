@@ -1,5 +1,7 @@
 from types import SimpleNamespace as NS
 
+import anthropic
+import httpx2
 import pytest
 
 from app.application.conversation import (
@@ -14,6 +16,7 @@ from app.application.conversation import (
     ToolResultsMessage,
     ToolSpec,
     TurnComplete,
+    ModelUnavailable,
     UserMessage,
 )
 from app.infrastructure.llm.anthropic_provider import AnthropicProvider
@@ -127,3 +130,33 @@ def test_replays_native_assistant_content_and_tool_results():
         {"type": "tool_result", "tool_use_id": "2", "content": "boom", "is_error": True},
     ]}
     assert "tools" not in client.calls[0]
+
+
+class FailingClient:
+    def __init__(self, error):
+        self.error = error
+        self.messages = self
+
+    def stream(self, **kwargs):
+        raise self.error
+
+
+def _status_error(cls, status):
+    return cls("upstream says no", response=httpx2.Response(status, request=httpx2.Request("POST", "https://api.test")), body=None)
+
+
+@pytest.mark.parametrize("error", [
+    _status_error(anthropic.RateLimitError, 429),
+    _status_error(anthropic.OverloadedError, 529),
+    _status_error(anthropic.InternalServerError, 500),
+    anthropic.APITimeoutError(request=httpx2.Request("POST", "https://api.test")),
+])
+def test_transient_failures_become_model_unavailable(error):
+    with pytest.raises(ModelUnavailable):
+        run(AnthropicProvider(FailingClient(error), model="m"), [UserMessage("hi")])
+
+
+def test_other_api_errors_pass_through():
+    error = _status_error(anthropic.AuthenticationError, 401)
+    with pytest.raises(anthropic.AuthenticationError):
+        run(AnthropicProvider(FailingClient(error), model="m"), [UserMessage("hi")])

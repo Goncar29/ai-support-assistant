@@ -27,6 +27,10 @@ describe("messages", () => {
     expect(chatErrorText(t, { kind: "incomplete" })).toBe("The connection closed before the reply finished.");
     expect(chatErrorText(t, { kind: "server" })).toBe("Something went wrong. Please try again.");
     expect(chatErrorText(t, { kind: "unexpected" })).toBe("Something unexpected happened. Please try again.");
+    expect(chatErrorText(t, { kind: "busy" })).toBe("The assistant is busy right now. Please try again in a moment.");
+    expect(chatErrorText(MESSAGES.es, { kind: "busy" })).toBe(
+      "El asistente está ocupado en este momento. Inténtalo de nuevo en unos segundos.",
+    );
   });
 
   it.each([

@@ -22,6 +22,7 @@ export type Messages = {
   thinking: string;
   errors: {
     server: string;
+    busy: string;
     incomplete: string;
     requestFailed: (status: number) => string;
     rateLimited: (seconds: number | null) => string;
@@ -50,6 +51,7 @@ const en: Messages = {
   thinking: "Thinking…",
   errors: {
     server: "Something went wrong. Please try again.",
+    busy: "The assistant is busy right now. Please try again in a moment.",
     incomplete: "The connection closed before the reply finished.",
     requestFailed: (status) => `Request failed (${status}).`,
     rateLimited: (seconds) =>
@@ -81,6 +83,7 @@ const es: Messages = {
   thinking: "Pensando…",
   errors: {
     server: "Algo salió mal. Inténtalo de nuevo.",
+    busy: "El asistente está ocupado en este momento. Inténtalo de nuevo en unos segundos.",
     incomplete: "La conexión se cerró antes de terminar la respuesta.",
     requestFailed: (status) => `La solicitud falló (${status}).`,
     rateLimited: (seconds) =>
@@ -111,6 +114,8 @@ export function chatErrorText(t: Messages, error: ChatError): string {
       return t.errors.incomplete;
     case "server":
       return t.errors.server;
+    case "busy":
+      return t.errors.busy;
     case "unexpected":
       return t.errors.unexpected;
   }

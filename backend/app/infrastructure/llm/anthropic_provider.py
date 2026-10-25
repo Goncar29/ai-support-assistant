@@ -1,5 +1,7 @@
 from typing import Any, Dict, Iterator, List, Sequence
 
+import anthropic
+
 from app.application.conversation import (
     STOP_END,
     STOP_MAX_TOKENS,
@@ -8,6 +10,7 @@ from app.application.conversation import (
     AssistantMessage,
     LLMEvent,
     Message,
+    ModelUnavailable,
     TextDelta,
     ToolCall,
     ToolResultsMessage,
@@ -15,6 +18,7 @@ from app.application.conversation import (
     TurnComplete,
     UserMessage,
 )
+from app.infrastructure.llm.errors import TRANSIENT_STATUS_CODES
 
 _STOP_REASONS = {"tool_use": STOP_TOOL_USE, "max_tokens": STOP_MAX_TOKENS, "refusal": STOP_REFUSAL}
 
@@ -31,6 +35,16 @@ class AnthropicProvider:
         self._max_tokens = max_tokens
 
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
+        try:
+            yield from self._stream(system, messages, tools)
+        except anthropic.APIConnectionError as exc:  # includes timeouts
+            raise ModelUnavailable(str(exc)) from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code in TRANSIENT_STATUS_CODES:
+                raise ModelUnavailable(str(exc)) from exc
+            raise
+
+    def _stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         request: Dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,

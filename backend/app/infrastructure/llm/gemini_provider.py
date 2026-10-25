@@ -1,5 +1,8 @@
 from typing import Any, Dict, Iterator, List, Optional, Sequence
 
+import httpx
+from google.genai import errors
+
 from app.application.conversation import (
     STOP_END,
     STOP_MAX_TOKENS,
@@ -8,6 +11,7 @@ from app.application.conversation import (
     AssistantMessage,
     LLMEvent,
     Message,
+    ModelUnavailable,
     TextDelta,
     ToolCall,
     ToolResultsMessage,
@@ -15,6 +19,7 @@ from app.application.conversation import (
     TurnComplete,
     UserMessage,
 )
+from app.infrastructure.llm.errors import TRANSIENT_STATUS_CODES
 
 _REFUSAL_REASONS = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"}
 # Older models may return a call without an id. We give it one locally so the agent can
@@ -32,6 +37,16 @@ class GeminiProvider:
         self._max_output_tokens = max_output_tokens
 
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
+        try:
+            yield from self._stream(system, messages, tools)
+        except httpx.TransportError as exc:  # timeouts and connection failures
+            raise ModelUnavailable(str(exc)) from exc
+        except errors.APIError as exc:
+            if exc.code in TRANSIENT_STATUS_CODES:
+                raise ModelUnavailable(str(exc)) from exc
+            raise
+
+    def _stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
         config: Dict[str, Any] = {
             "system_instruction": system,
             "max_output_tokens": self._max_output_tokens,
