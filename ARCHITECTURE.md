@@ -196,7 +196,7 @@ On the frontend, `src/api/chatStream.ts` reads the stream and parses frames (inc
 
 `POST /chat` still exists for clients that want a single JSON reply: it runs the same loop and returns `{"reply"}`.
 
-**Conversation memory.** The server keeps no conversation state, which suits serverless functions: the frontend sends the last 10 messages as `history` with each new one (`user` and `assistant` turns only, so a client cannot inject system or tool turns). The agent keeps the most recent turns that fit in `MAX_HISTORY_CHARS` (8000 characters), because they are resent on every model step and count toward the cost. It also shapes them so every provider accepts them: the conversation opens with a user turn, and a user turn left without a reply joins the next one. Closing or reloading the page starts a new conversation.
+**Conversation memory.** The server keeps no conversation state, which suits serverless functions: the frontend sends the last 10 messages as `history` with each new one (`user` and `assistant` turns only, so a client cannot inject system or tool turns). The agent keeps the most recent turns that fit in `MAX_HISTORY_CHARS` (8000 characters), because they are resent on every model step and count toward the cost. It also shapes them so every provider accepts them: the conversation opens with a user turn, and a user turn left without a reply joins the next one. The conversation itself lives in the visitor's browser: `useChat` restores it from `localStorage` on load and saves it after each reply (the last 50 messages, never a half-written reply; data it cannot read is ignored, and blocked storage just means no saving). "New conversation" in the header clears it; on phones the button shrinks to a "+" icon.
 
 ## Persistence
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatRequestError, streamChat, type ChatError, type ChatStreamEvent, type HistoryTurn } from "../api/chatStream";
+import { loadConversation, saveConversation } from "./conversationStorage";
 
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
 
@@ -14,13 +15,18 @@ function toHistory(messages: ChatMessage[]): HistoryTurn[] {
 }
 
 export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // The conversation survives a reload: it is restored from this browser and saved after each reply.
+  const [messages, setMessages] = useState<ChatMessage[]>(loadConversation);
   const [streaming, setStreaming] = useState(false);
   const [activity, setActivity] = useState<string | null>(null);
   const [error, setError] = useState<ChatError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!streaming) saveConversation(messages); // never a half-written reply
+  }, [messages, streaming]);
 
   const send = useCallback(
     async (text: string) => {
@@ -78,5 +84,13 @@ export function useChat() {
     [streaming, messages],
   );
 
-  return { messages, streaming, activity, error, send };
+  /** Starts over: stops a reply in progress and forgets the saved conversation. */
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setError(null);
+    setActivity(null);
+  }, []);
+
+  return { messages, streaming, activity, error, send, reset };
 }
