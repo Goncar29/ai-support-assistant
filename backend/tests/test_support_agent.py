@@ -63,6 +63,18 @@ def test_agent_offers_support_tools_to_the_model():
     assert [spec.name for spec in llm.tools[0]] == ["search_faq", "create_ticket"]
 
 
+def test_agent_tells_the_model_to_answer_only_from_the_faq():
+    agent, llm, _ = make_agent([search("1", "shipping"), AssistantMessage(text="3-7 days.")])
+    agent.reply("Does international shipping take longer?")
+
+    # Every step gets the same rules, so a later turn cannot drift from them.
+    assert len(llm.systems) == 2
+    for system in llm.systems:
+        assert "Reply in the language of the user's latest message" in system
+        assert "Do not add facts, numbers or cases the FAQ does not state" in system
+        assert "Create a ticket only if no answer is found" in system
+
+
 def test_agent_gives_up_after_max_steps():
     agent, llm, _ = make_agent([search("x", "a")] * 10)
     assert "could not complete" in agent.reply("loop")

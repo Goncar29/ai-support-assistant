@@ -14,8 +14,12 @@ from app.application.ports import AgentEvent, LLMProvider, ReplyFinished, ToolSt
 from app.application.support_tools import SupportTools
 
 SYSTEM_PROMPT = (
-    "You are a concise support assistant. Answer in the user's language. "
-    "Search the FAQ first; create a ticket only if no answer is found."
+    "You are a concise support assistant. "
+    "Reply in the language of the user's latest message. "
+    "Search the FAQ first; one search per topic is enough. "
+    "Do not add facts, numbers or cases the FAQ does not state. "
+    "If the user asks about a case the FAQ does not mention, give what the FAQ says and add that it does not cover that case. "
+    "Create a ticket only if no answer is found."
 )
 MAX_STEPS = 5
 # Earlier turns are resent on every model step, so they are capped like the rest of the cost:
