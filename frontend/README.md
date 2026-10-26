@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# AI Support Assistant: frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript (Vite) chat UI for the support assistant. Setup, configuration and deploy are in the [root README](../README.md); the request flow is in [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-Currently, two official plugins are available:
+## Scripts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server on http://localhost:5173 |
+| `npm test` | Vitest + Testing Library |
+| `npm run lint` | Oxlint |
+| `npm run build` | Type check and production build |
 
-## React Compiler
+Set `VITE_API_URL` to point at a backend other than `http://localhost:8000`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Layout
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+| Path | Contents |
+|---|---|
+| `src/api/` | SSE client for `/chat/stream` |
+| `src/hooks/useChat.ts` | Chat state: sends the message plus recent history, streams the reply |
+| `src/hooks/conversationStorage.ts` | Saves and restores the conversation in `localStorage` |
+| `src/hooks/useSpeechInput.ts` | Voice input through the Web Speech API |
+| `src/components/` | Header, message list, composer, mic button, orb |
+| `src/i18n/` | English and Spanish strings |

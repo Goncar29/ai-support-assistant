@@ -1,10 +1,10 @@
 # AI Support Assistant
 
-A customer-support chat powered by Claude. The agent searches an FAQ, answers in the user's language, and opens a support ticket when the FAQ has no answer. Replies stream to the browser as they are written, and tickets persist in Postgres.
+A customer-support chat powered by an LLM agent (Claude, OpenAI or Gemini). The agent searches an FAQ, answers in the user's language, and opens a support ticket when the FAQ has no answer. Replies stream to the browser as they are written, the chat remembers the conversation, and tickets persist in Postgres.
 
 **Live demo:** https://ai-support-assistant-sigma.vercel.app (API: https://ai-support-assistant-api.vercel.app/health)
 
-> The live demo currently runs in **demo mode**: no Anthropic API key is configured, so a scripted model stands in for Claude. It still drives the real agent loop: it searches the FAQ in English or Spanish (try refunds, shipping or passwords, or "¿Cuánto tarda el envío?") and opens a real ticket in Postgres when you ask for one ("open a ticket", "talk to a human"). Streaming, tools, storage, rate limiting and the deploy are all real; only the reasoning is fixed.
+> The live demo runs on **Gemini 3.5 Flash-Lite on Google's free tier**. Try refunds, shipping or passwords, in English or Spanish ("¿Cuánto tarda el envío?"), follow up on an earlier answer, or ask for a human to get a real ticket in Postgres. The free tier allows only a few requests per minute for all visitors together, so under load the chat answers "The assistant is busy right now"; wait a moment and send again. Without any provider key the app falls back to **demo mode**, a scripted model that still drives the real agent loop.
 
 The interface follows your browser language (English or Spanish, switchable from the header) and accepts voice input in browsers with the Web Speech API (Chrome, Edge, Safari); the orb reacts to what the assistant is doing and to your voice.
 
@@ -77,7 +77,7 @@ Two Vercel projects (Hobby plan) linked to this repository, plus a Neon Postgres
 
 | Vercel project | Root directory | Framework | Environment variables |
 |---|---|---|---|
-| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `DATABASE_URL` and the provider's API key as **Sensitive** |
+| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `LLM_PROVIDER=gemini` and `GEMINI_MODEL`; `DATABASE_URL` and `GEMINI_API_KEY` as **Sensitive** |
 | `ai-support-assistant` | `frontend/` | Vite | `VITE_API_URL` = API URL |
 
 Steps for a fresh setup:
@@ -122,5 +122,6 @@ Both chat endpoints are rate limited per client IP (per /64 network for IPv6, so
 - [x] Postgres persistence (Neon)
 - [x] Free deploy on Vercel
 - [x] Per-IP rate limit on the chat endpoints
-- [ ] Live Claude in the demo (needs API credits)
-- [ ] A second LLM provider behind the same port
+- [x] More LLM providers behind the same port (OpenAI, Gemini), with retries and a "busy" reply when the provider is overloaded
+- [x] Conversation memory (recent history sent with each message, kept in the browser, "New conversation" button)
+- [x] A real model in the live demo (Gemini 3.5 Flash-Lite, free tier)
