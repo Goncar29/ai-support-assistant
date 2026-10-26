@@ -1,6 +1,6 @@
 # Architecture
 
-AI Support Assistant is a customer-support chat. A user writes a question in a React app; a FastAPI backend runs a Claude agent that searches an FAQ, answers in the user's language, and opens a support ticket when the FAQ has no answer. The reply streams to the browser token by token, tickets persist in Postgres (Neon), and an optional n8n webhook is notified for every new ticket.
+AI Support Assistant is a customer-support chat. A user writes a question in a React app; a FastAPI backend runs an LLM agent (Claude, OpenAI or Gemini) that searches an FAQ, answers in the user's language using only what the FAQ says, and opens a support ticket when the FAQ has no answer. The reply streams to the browser token by token, tickets persist in Postgres (Neon), and an optional n8n webhook is notified for every new ticket.
 
 The backend is built as a **hexagonal architecture** (ports and adapters): the business logic does not know which LLM, database, or notification channel it uses, so each one can be swapped or faked in tests without touching the core.
 

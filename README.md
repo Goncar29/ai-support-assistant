@@ -1,6 +1,6 @@
 # AI Support Assistant
 
-A customer-support chat powered by an LLM agent (Claude, OpenAI or Gemini). The agent searches an FAQ, answers in the user's language, and opens a support ticket when the FAQ has no answer. Replies stream to the browser as they are written, the chat remembers the conversation, and tickets persist in Postgres.
+A customer-support chat powered by an LLM agent (Claude, OpenAI or Gemini). The agent searches an FAQ, answers in the user's language using only what the FAQ says, and opens a support ticket when the FAQ has no answer. Replies stream to the browser as they are written, the chat remembers the conversation, and tickets persist in Postgres.
 
 **Live demo:** https://ai-support-assistant-sigma.vercel.app (API: https://ai-support-assistant-api.vercel.app/health)
 

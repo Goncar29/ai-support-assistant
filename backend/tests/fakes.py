@@ -12,8 +12,10 @@ class ScriptedLLM:
         self.turns = list(turns)
         self.calls: List[List[Message]] = []
         self.tools: List[Sequence[ToolSpec]] = []
+        self.systems: List[str] = []
 
     def stream(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> Iterator[LLMEvent]:
+        self.systems.append(system)
         self.calls.append(list(messages))
         self.tools.append(tools)
         turn = self.turns.pop(0)
