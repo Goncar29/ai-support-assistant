@@ -4,7 +4,7 @@ A customer-support chat powered by an LLM agent (Claude, OpenAI or Gemini). The 
 
 **Live demo:** https://ai-support-assistant-sigma.vercel.app (API: https://ai-support-assistant-api.vercel.app/health)
 
-> The live demo runs on **Gemini 2.5 Flash on Google's free tier** (`GEMINI_MODEL=gemini-2.5-flash`; it answered in 2-3 s where 3.5 Flash-Lite took 10-30 s per call on the free tier). Try refunds, shipping or passwords, in English or Spanish ("¿Cuánto tarda el envío?"), follow up on an earlier answer, or ask for a human to get a real ticket in Postgres. The free tier allows only a few requests per minute for all visitors together, so under load the chat answers "The assistant is busy right now"; wait a moment and send again. Without any provider key the app falls back to **demo mode**, a scripted model that still drives the real agent loop.
+> The live demo runs on **Gemini 3.5 Flash-Lite on Google's free tier** (`GEMINI_MODEL=gemini-3.5-flash-lite`). Replies can take from a few seconds to about half a minute, because the free tier is slow and variable; Gemini 2.5 Flash is faster but its free tier allows only 20 requests a day, a handful of chats. Try refunds, shipping or passwords, in English or Spanish ("¿Cuánto tarda el envío?"), follow up on an earlier answer, or ask for a human to get a real ticket in Postgres. The free tier allows only a few requests per minute for all visitors together, so under load the chat answers "The assistant is busy right now"; wait a moment and send again. Without any provider key the app falls back to **demo mode**, a scripted model that still drives the real agent loop.
 
 The interface follows your browser language (English or Spanish, switchable from the header) and accepts voice input in browsers with the Web Speech API (Chrome, Edge, Safari); the orb reacts to what the assistant is doing and to your voice.
 
@@ -77,7 +77,7 @@ Two Vercel projects (Hobby plan) linked to this repository, plus a Neon Postgres
 
 | Vercel project | Root directory | Framework | Environment variables |
 |---|---|---|---|
-| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `LLM_PROVIDER=gemini` and `GEMINI_MODEL=gemini-2.5-flash`; `DATABASE_URL` and `GEMINI_API_KEY` as **Sensitive** |
+| `ai-support-assistant-api` | `backend/` | FastAPI, functions in `iad1` (next to Neon) | `CORS_ORIGINS` = frontend URL; `LLM_PROVIDER=gemini` and `GEMINI_MODEL=gemini-3.5-flash-lite`; `DATABASE_URL` and `GEMINI_API_KEY` as **Sensitive** |
 | `ai-support-assistant` | `frontend/` | Vite | `VITE_API_URL` = API URL |
 
 Steps for a fresh setup:
@@ -124,4 +124,4 @@ Both chat endpoints are rate limited per client IP (per /64 network for IPv6, so
 - [x] Per-IP rate limit on the chat endpoints
 - [x] More LLM providers behind the same port (OpenAI, Gemini), with retries and a "busy" reply when the provider is overloaded
 - [x] Conversation memory (recent history sent with each message, kept in the browser, "New conversation" button)
-- [x] A real model in the live demo (Gemini 2.5 Flash, free tier)
+- [x] A real model in the live demo (Gemini 3.5 Flash-Lite, free tier)
